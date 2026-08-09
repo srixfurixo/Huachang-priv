@@ -1,0 +1,40 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Local package manager / tooling (team uses npm + package-lock.json)
+pnpm-lock.yaml
+
+# Local editor lint/format config — not shared with repo
+.eslintrc
+.eslintrc.*
+eslint.config.*
+.prettierrc
+.prettierrc.*
+prettier.config.*
+.editorconfig
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+image-2.png
+image-3.png
+image.png
+.github/workflows/deploy.yml

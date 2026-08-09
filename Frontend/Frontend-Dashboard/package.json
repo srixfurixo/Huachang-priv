@@ -1,0 +1,41 @@
+{
+  "name": "frontend-dashboard",
+  "version": "1.0.0",
+  "description": "",
+  "main": "vite.config.js",
+  "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HuaChang-FYP-Team/Frontend-Dashboard.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/HuaChang-FYP-Team/Frontend-Dashboard/issues"
+  },
+  "homepage": "https://github.com/HuaChang-FYP-Team/Frontend-Dashboard#readme",
+  "dependencies": {
+    "@ant-design/colors": "^8.0.1",
+    "@ant-design/icons": "^6.2.5",
+    "@vitejs/plugin-react": "^6.0.2",
+    "antd": "^6.4.3",
+    "axios": "^1.16.1",
+    "dayjs": "^1.11.21",
+    "dompurify": "^3.4.7",
+    "lucide-react": "^1.31.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "react-icons": "^5.6.0",
+    "react-router-dom": "^7.16.0",
+    "recharts": "^3.10.1",
+    "vite": "^8.0.16"
+  }
+}
