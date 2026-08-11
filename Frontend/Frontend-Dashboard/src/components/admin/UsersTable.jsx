@@ -1,62 +1,39 @@
-import React, {useState, useEffect} from 'react';
-import {Table, Input, Tag, Space, message } from 'antd';
+import React, { useState, useEffect } from 'react';
+import { Table, Input, Tag, Space, Button } from 'antd';
+import { EditOutlined } from '@ant-design/icons';
 import '../../styles/usersTable.css';
-import axios from 'axios';
 
-const {Search} = Input;
+const { Search } = Input;
 
-function UsersTable({users = [], loading = true}) {
+function UsersTable({ users = [], loading = true, onEditUser }) {
   const [filteredUsers, setFilteredUsers] = useState([]);
 
-  // Fetch the list of All users 
-  // useEffect(() => {
-    // const fetchUsers = async()=>{
-    //   try{
-    //     const response = await axios.get('http://localhost:5000/api/admin/retrieve_users'); // needs to be complete 
-    //     // fixes added to handle the json return 
-    //     const table_data = response.data.users;
-    //     setUsers(table_data);
-    //     setFilteredUsers(table_data);
+  useEffect(() => {
+    setFilteredUsers(users);
+  }, [users]);
 
-    //   } catch (error){
-    //     console.error('Error fetching users:', error);
-    //     message.error('Failed to load user data.');
-    //   } finally {
-    //     setLoading(false);
-    //   }
-    // };
-    
-    // fetchUsers();
-
-    useEffect(() => {
-      setFilteredUsers(users);
-    }, [users]);
-
-  // Search function with lower case safety net
   const handleSearch = (e) => {
-    const value= e.target.value.toLowerCase();
+    const value = e.target.value.toLowerCase();
 
     const filtered = users.filter((user) => {
       const firstName = (user.first_name || '').toLowerCase();
       const lastName = (user.last_name || '').toLowerCase();
       const username = (user.username || '').toLowerCase();
       const email = (user.email || '').toLowerCase();
-      // fixed wrong index used
       const role = (user.role || '').toLowerCase();
 
       return (
         firstName.includes(value) ||
         lastName.includes(value) ||
         username.includes(value) ||
-        email.includes (value) ||
+        email.includes(value) ||
         role.includes(value)
       );
     });
 
-    setFilteredUsers(filtered); // Redraw table with search list
+    setFilteredUsers(filtered);
   };
 
-  // Set columns
   const columns = [
     {
       title: 'First Name',
@@ -78,45 +55,51 @@ function UsersTable({users = [], loading = true}) {
       dataIndex: 'email',
       key: 'email',
     },
-
-    // fixed role data index and color tags as well
     {
       title: 'Role',
       dataIndex: 'role',
       key: 'role',
       render: (role) => {
-
-        // color based on role
         let color = 'default';
+        let displayRole = role;
         if (role === 'Admin') color = 'magenta';
         else if (role === 'Manager') color = 'geekblue';
-        else if (role === 'Warehouse_Supervisor') { 
-          color = 'purple'; 
-          role = 'Warehouse Supervisor';
-        }
-        else if (role === 'Warehouse_Employee') { 
-          color = 'cyan'; 
-          role = 'Warehouse Employee';
-        }
-        else if (role === 'Delivery_Supervisor') { 
-          color = 'orange'; 
-          role = 'Delivery Supervisor';
-        }
-        else if (role === 'Delivery_Driver') { 
-          color = 'gold'; 
-          role = 'Delivery Driver';
+        else if (role === 'Warehouse_Supervisor') {
+          color = 'purple';
+          displayRole = 'Warehouse Supervisor';
+        } else if (role === 'Warehouse_Employee') {
+          color = 'cyan';
+          displayRole = 'Warehouse Employee';
+        } else if (role === 'Delivery_Supervisor') {
+          color = 'orange';
+          displayRole = 'Delivery Supervisor';
+        } else if (role === 'Delivery_Driver') {
+          color = 'gold';
+          displayRole = 'Delivery Driver';
         }
 
         return (
           <Tag color={color} key={role}>
-            {role ? role : 'UNASSIGNED'}
+            {displayRole ? displayRole : 'UNASSIGNED'}
           </Tag>
         );
       },
     },
+    {
+      title: 'Action',
+      key: 'action',
+      render: (_, record) => (
+        <Button
+          type="link"
+          icon={<EditOutlined />}
+          onClick={() => onEditUser && onEditUser(record)}
+        >
+          Edit
+        </Button>
+      ),
+    },
   ];
 
-  // Draw Table
   return (
     <div style={{ backgroundColor: 'white', padding: '24px', borderRadius: '8px', minHeight: '500px' }}>
       <Space direction="vertical" style={{ width: '100%' }} size="large">
@@ -131,12 +114,12 @@ function UsersTable({users = [], loading = true}) {
           columns={columns}
           dataSource={filteredUsers}
           loading={loading}
-          rowKey="id" 
-          pagination={{ pageSize: 5 }}
+          rowKey="id"
+          pagination={{ pageSize: 8 }}
         />
       </Space>
     </div>
   );
 }
 
-  export default UsersTable
+export default UsersTable;

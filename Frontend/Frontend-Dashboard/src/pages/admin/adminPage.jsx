@@ -14,12 +14,15 @@ import AppLayout from '../../components/layout/AppLayout'
 import StatCard from '../../components/common/StatCard'
 import AddNewUser from '../../components/admin/AddNewUser'
 import PasswordUser from '../../components/admin/PasswordUser'
+import EditUserModal from '../../components/admin/EditUserModal'
 import UsersTable from '../../components/admin/UsersTable'
 
 const { Title, Text } = Typography
 
 function AdminPage() {
 	const [isModalOpen, setIsModalOpen]             = useState(false)
+	const [editModalOpen, setEditModalOpen]         = useState(false)
+	const [selectedUser, setSelectedUser]           = useState(null)
 	const [generatedPassword, setGeneratedPassword] = useState('')
 	const [createdUsername, setCreatedUsername]     = useState('')
 	const [showPasswordAlert, setShowPasswordAlert] = useState(false)
@@ -41,6 +44,11 @@ function AdminPage() {
 	}, [])
 
 	useEffect(() => { fetchUsers() }, [fetchUsers])
+
+	const handleEditUser = (user) => {
+		setSelectedUser(user)
+		setEditModalOpen(true)
+	}
 
 	const totalUsers    = users.length
 	const activeUsers   = users.filter((u) => u.is_active).length
@@ -128,7 +136,7 @@ function AdminPage() {
 				</Col>
 			</Row>
 
-			<UsersTable users={users} loading={usersLoading} />
+			<UsersTable users={users} loading={usersLoading} onEditUser={handleEditUser} />
 
 			<AddNewUser
 				open={isModalOpen}
@@ -139,6 +147,13 @@ function AdminPage() {
 					setShowPasswordAlert(true)
 					fetchUsers()
 				}}
+			/>
+
+			<EditUserModal
+				open={editModalOpen}
+				onClose={() => setEditModalOpen(false)}
+				user={selectedUser}
+				onUserUpdated={fetchUsers}
 			/>
 
 			<PasswordUser
