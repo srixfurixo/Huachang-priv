@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Modal, Spin, Table, Tag, message } from 'antd';
+import DocumentListSection from '../common/DocumentListSection';
 
 function PurchaseOrderDetailModal({ open, onClose, poNumber }) {
   const [loading, setLoading] = useState(false);
@@ -63,6 +64,8 @@ function PurchaseOrderDetailModal({ open, onClose, poNumber }) {
               { title: 'Available Qty (MT)', dataIndex: 'available_qty_mt', align: 'right' },
             ]}
           />
+
+          <DocumentListSection documentType="PO" referenceNumber={poNumber} />
         </div>
       ) : null}
     </Modal>

@@ -29,7 +29,7 @@ export function UserProvider({ children }) {
 
     async function logout() {
         try {
-            await axios.post('http://localhost:5000/api/auth/logout'); // pending 
+            await axios.post('/api/auth/logout'); // pending 
         } catch (error) {
             console.error('Error during logout:', error);
         } finally {

@@ -6,8 +6,8 @@ import { ThemeProvider } from './context/ThemeContext'
 import App from './App'
 import './styles/globals.css'
 
-// App-level axios defaults (team owns UserContext — move here until they add baseURL there)
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+// App-level axios defaults (relative baseURL so Nginx handles proxying in prod & Vite in dev)
+axios.defaults.baseURL = import.meta.env.VITE_API_URL || ''
 axios.defaults.withCredentials = true
 
 /**

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Modal, Spin, Table, Tag, message } from 'antd';
+import DocumentListSection from '../common/DocumentListSection';
 
 function SalesOrderDetailModal({ open, onClose, soNumber }) {
   const [loading, setLoading] = useState(false);
@@ -51,6 +52,8 @@ function SalesOrderDetailModal({ open, onClose, soNumber }) {
 
           <h4 style={{ marginTop: 20 }}>Active Allocations</h4>
           <h4>pending fix and db redo</h4>
+
+          <DocumentListSection documentType="SO" referenceNumber={soNumber} />
         </div>
       ) : null}
     </Modal>

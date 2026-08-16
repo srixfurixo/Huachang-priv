@@ -1,42 +1,131 @@
-import React, { useState, useMemo } from 'react';
-import { Card, Row, Col, Progress, Table, Tag, Typography, Space } from 'antd';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Cell } from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { Card, Table, Input, Select, Tag, Typography, Space, message } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
+import axios from 'axios';
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
+const { Option } = Select;
 
-const defaultProducts = [
-  { name: 'Gold Mas', kind: 'Finished', stock: 1500, maxCap: 2000, atp: 1200 },
-  { name: 'UREA', kind: 'Raw', stock: 2100, maxCap: 2500, atp: 1950 },
-  { name: 'MOP', kind: 'Raw', stock: 800, maxCap: 1200, atp: 150 },
-  { name: 'CIRP', kind: 'Trading', stock: 420, maxCap: 600, atp: 310 },
-];
+const BatchList = () => {
+  const [batches, setBatches] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusConfidence, setStatusConfidence] = useState('');
+  const [locationId, setLocationId] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
 
-const bucketColors = ['#F43F5E', '#F97316', '#64748B', '#10B981'];
-
-const BatchList = ({ aging = [], demandVsSupply = [] }) => {
-  const [selectedIdx, setSelectedIdx] = useState(0);
-
-  const formattedAging = useMemo(() => {
-    if (aging && aging.length > 0) {
-      return aging.map((item, index) => ({
-        label: item.bucket,
-        mt: Number(item.qty_mt || 0),
-        batchCount: Number(item.batch_count || 0),
-        color: bucketColors[index % bucketColors.length],
-      }));
+  const fetchLocations = async () => {
+    try {
+      const res = await axios.get('/api/referenceData/locations');
+      if (res.data) {
+        setLocations(Array.isArray(res.data) ? res.data : (res.data.locations || []));
+      }
+    } catch {
     }
-    return [
-      { label: '<30 Days', mt: 450, batchCount: 3, color: '#F43F5E' },
-      { label: '30–60 Days', mt: 800, batchCount: 5, color: '#F97316' },
-      { label: '60–90 Days', mt: 100, batchCount: 2, color: '#64748B' },
-      { label: '180+ Days', mt: 150, batchCount: 4, color: '#10B981' },
-    ];
-  }, [aging]);
+  };
+
+  const fetchBatches = async () => {
+    setLoading(true);
+    try {
+      const params = {
+        page,
+        limit: 10,
+      };
+      if (search) {
+        params.batch_code = search;
+      }
+      if (statusConfidence) {
+        params.status_confidence = statusConfidence;
+      }
+      if (locationId) {
+        params.location_id = locationId;
+      }
+
+      const res = await axios.get('/api/inventory/batches', { params });
+      if (res.data && res.data.success) {
+        setBatches(res.data.batches || []);
+        setTotal(res.data.total || 0);
+      }
+    } catch (err) {
+      console.error(err);
+      message.error('Failed to load inventory batches');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLocations();
+  }, []);
+
+  useEffect(() => {
+    fetchBatches();
+  }, [page, statusConfidence, locationId]);
 
   const columns = [
-    { title: 'Expiry Bucket', dataIndex: 'label', key: 'label', render: (t) => <Text strong>{t}</Text> },
-    { title: 'Volume (MT)', dataIndex: 'mt', key: 'mt', render: (v) => <Text strong>{v} MT</Text> },
-    { title: 'Batches', dataIndex: 'batchCount', key: 'batchCount', render: (v) => <Tag color="blue">{v} Batches</Tag> },
+    {
+      title: 'Batch Code',
+      dataIndex: 'batch_code',
+      key: 'batch_code',
+      render: (t) => <Text strong style={{ color: '#1890FF' }}>{t}</Text>,
+    },
+    {
+      title: 'Item Code',
+      dataIndex: 'item_code',
+      key: 'item_code',
+      render: (t, r) => (
+        <div>
+          <Text strong>{t}</Text>
+          <div style={{ fontSize: 11, color: '#64748B' }}>{r.description}</div>
+        </div>
+      ),
+    },
+    {
+      title: 'Location',
+      dataIndex: 'location',
+      key: 'location',
+    },
+    {
+      title: 'Current Qty',
+      dataIndex: 'current_qty',
+      key: 'current_qty',
+      align: 'right',
+      render: (v, r) => `${Number(v).toLocaleString()} ${r.uom || 'MT'}`,
+    },
+    {
+      title: 'Status',
+      dataIndex: 'status_confidence',
+      key: 'status_confidence',
+      render: (status) => {
+        let color = 'default';
+        if (status === 'Live') color = 'green';
+        else if (status === 'Reported') color = 'gold';
+        else if (status === 'Pending') color = 'blue';
+        return <Tag color={color}>{status}</Tag>;
+      },
+    },
+    {
+      title: 'Expiry Date',
+      dataIndex: 'expiry_date',
+      key: 'expiry_date',
+      render: (d, r) => {
+        if (!d) return '-';
+        const formatted = d.split('T')[0];
+        const days = r.days_to_expiry;
+        return (
+          <div>
+            <span>{formatted}</span>
+            {days !== null && days !== undefined && (
+              <span style={{ fontSize: 11, color: days < 30 ? '#f5222d' : '#64748B', display: 'block' }}>
+                ({days} days left)
+              </span>
+            )}
+          </div>
+        );
+      },
+    },
   ];
 
   return (
@@ -45,70 +134,62 @@ const BatchList = ({ aging = [], demandVsSupply = [] }) => {
       style={{ borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.05)', marginBottom: 16 }}
       title={
         <div>
-          <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Master Stock & Batch Explorer</Text>
+          <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>Inventory Batches</Text>
           <br />
-          <Text strong style={{ fontSize: 15 }}>Live Stock Levels & Aging</Text>
+          <Text strong style={{ fontSize: 15 }}>Batch & Stock Explorer</Text>
         </div>
       }
     >
-      <Row gutter={[16, 16]}>
-        <Col xs={24} md={8}>
-          <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
-            Select Product SKU
-          </Text>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {defaultProducts.map((p, idx) => {
-              const isSelected = selectedIdx === idx;
-              const percent = Math.round((p.stock / p.maxCap) * 100);
-              return (
-                <div
-                  key={p.name}
-                  onClick={() => setSelectedIdx(idx)}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    background: isSelected ? '#EBF5FF' : '#FAFBFD',
-                    border: isSelected ? '2px solid #1890FF' : '1px solid #E2E8F0',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text strong style={{ color: isSelected ? '#0050B3' : '#0B1C30' }}>{p.name}</Text>
-                    <Text strong style={{ color: '#1890FF' }}>{p.stock} MT</Text>
-                  </div>
-                  <Progress percent={percent} size="small" strokeColor="#1890FF" />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748B', marginTop: 2 }}>
-                    <span>ATP: {p.atp} MT</span>
-                    <span>Cap: {p.maxCap} MT</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Col>
+      <Space wrap style={{ marginBottom: 16 }}>
+        <Input
+          placeholder="Search batch code..."
+          prefix={<SearchOutlined style={{ color: '#94A3B8' }} />}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onPressEnter={() => { setPage(1); fetchBatches(); }}
+          style={{ width: 200 }}
+          allowClear
+        />
 
-        <Col xs={24} md={16}>
-          <Text type="secondary" style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>
-            Shelf-Life Expiry Histogram (MT)
-          </Text>
-          <div style={{ width: '100%', height: 160, marginBottom: 12 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={formattedAging} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip formatter={(v) => [`${v} MT`, 'Volume']} />
-                <Bar dataKey="mt" radius={[4, 4, 0, 0]}>
-                  {formattedAging.map((entry, index) => (
-                    <Cell key={index} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        <Select
+          placeholder="Filter by Status"
+          value={statusConfidence || undefined}
+          onChange={(val) => { setStatusConfidence(val); setPage(1); }}
+          style={{ width: 150 }}
+          allowClear
+        >
+          <Option value="Live">Live</Option>
+          <Option value="Reported">Reported</Option>
+          <Option value="Pending">Pending</Option>
+        </Select>
 
-          <Table dataSource={formattedAging} columns={columns} pagination={false} size="small" rowKey="label" bordered />
-        </Col>
-      </Row>
+        <Select
+          placeholder="Filter by Location"
+          value={locationId || undefined}
+          onChange={(val) => { setLocationId(val); setPage(1); }}
+          style={{ width: 170 }}
+          allowClear
+        >
+          {locations.map((loc) => (
+            <Option key={loc.id} value={loc.id}>{loc.name}</Option>
+          ))}
+        </Select>
+      </Space>
+
+      <Table
+        dataSource={batches}
+        columns={columns}
+        rowKey="batch_code"
+        loading={loading}
+        size="small"
+        pagination={{
+          current: page,
+          pageSize: 10,
+          total,
+          onChange: (p) => setPage(p),
+          showTotal: (total) => `Total ${total} batches`,
+        }}
+      />
     </Card>
   );
 };

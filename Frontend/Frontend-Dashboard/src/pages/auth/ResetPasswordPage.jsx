@@ -31,7 +31,7 @@ function ResetPasswordPage() {
       }
 
       try {
-        const response = await axios.get(`http://localhost:5000/api/auth/verify-reset-token/${token}`);
+        const response = await axios.get(`/api/auth/verify-reset-token/${token}`);
         if (response.data.success) {
           setIsTokenValid(true);
         }
@@ -65,7 +65,7 @@ function ResetPasswordPage() {
 
     try {
       setLoading(true);
-      const response = await axios.post('http://localhost:5000/api/auth/reset-password', {
+      const response = await axios.post('/api/auth/reset-password', {
         token,
         password: sanitizedPassword
       });

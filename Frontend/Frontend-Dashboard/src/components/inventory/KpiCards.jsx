@@ -1,18 +1,19 @@
 import React from 'react';
-import { Card, Row, Col, Typography, Tag, Space } from 'antd';
+import { Card, Row, Col, Typography, Tag } from 'antd';
 import { ArrowUpOutlined, ArrowDownOutlined, StockOutlined, CheckCircleOutlined, ImportOutlined, WarningOutlined } from '@ant-design/icons';
 
 const { Text, Title } = Typography;
 
-const KpiCards = ({ kpis = {}, loading = false }) => {
-  const totalOnHand = Number(kpis.total_on_hand_mt || 8450);
-  const liveMt = Number(kpis.live_mt || 5200);
-  const reportedMt = Number(kpis.reported_mt || 3250);
-  const atpMt = Number(kpis.available_to_promise_mt || 6120);
-  const inboundMt = Number(kpis.inbound_mt || 1240);
-  const activeCaCount = Number(kpis.active_ca_count || 4);
-  const expiring60d = Number(kpis.expiring_60d_mt || 315);
-  const netChange7d = Number(kpis.net_change_7d_mt || 2.3);
+const KpiCards = ({ data = {}, kpis, loading = false }) => {
+  const kpiData = data || kpis || {};
+  const totalOnHand = Number(kpiData.total_on_hand_mt || 0);
+  const liveMt = Number(kpiData.live_mt || 0);
+  const reportedMt = Number(kpiData.reported_mt || 0);
+  const atpMt = Number(kpiData.available_to_promise_mt || 0);
+  const inboundMt = Number(kpiData.inbound_mt || 0);
+  const activeCaCount = Number(kpiData.active_ca_count || 0);
+  const expiring60d = Number(kpiData.expiring_60d_mt || 0);
+  const netChange7d = Number(kpiData.net_change_7d_mt || 0);
 
   const cards = [
     {
@@ -21,7 +22,11 @@ const KpiCards = ({ kpis = {}, loading = false }) => {
       sub: `Live: ${liveMt.toLocaleString()} MT | Reported: ${reportedMt.toLocaleString()} MT`,
       border: '#1890FF',
       icon: <StockOutlined style={{ fontSize: 18, color: '#1890FF' }} />,
-      tag: <Tag color={netChange7d >= 0 ? 'success' : 'error'} icon={netChange7d >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}>{netChange7d >= 0 ? '+' : ''}{netChange7d}%</Tag>,
+      tag: (
+        <Tag color={netChange7d >= 0 ? 'success' : 'error'} icon={netChange7d >= 0 ? <ArrowUpOutlined /> : <ArrowDownOutlined />}>
+          {netChange7d >= 0 ? '+' : ''}{netChange7d} MT (7d)
+        </Tag>
+      ),
     },
     {
       title: 'AVAILABLE TO PROMISE (ATP)',
@@ -29,7 +34,7 @@ const KpiCards = ({ kpis = {}, loading = false }) => {
       sub: 'Physical stock minus committed sales',
       border: '#10B981',
       icon: <CheckCircleOutlined style={{ fontSize: 18, color: '#10B981' }} />,
-      tag: <Tag color="success" icon={<ArrowUpOutlined />}>+1.1%</Tag>,
+      tag: <Tag color="success">ATP</Tag>,
     },
     {
       title: 'INBOUND SUPPLY PIPELINE',

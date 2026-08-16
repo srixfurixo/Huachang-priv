@@ -19,7 +19,7 @@
           setLoading(true);
           try {
 
-          const response = await axios.post('http://localhost:5000/api/auth/register', {
+          const response = await axios.post('/api/auth/register', {
           first_name: values.firstName,
           last_name: values.lastName,
           username: values.username,

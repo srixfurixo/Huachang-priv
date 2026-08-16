@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Typography, Input, Table, Tag, Space, Row, Col, Button, theme, App, Modal, Form, Select, DatePicker, InputNumber } from 'antd'
+import { Typography, Input, Table, Tag, Space, Row, Col, Button, theme, App, Modal, Form, Select, DatePicker, InputNumber, Upload } from 'antd'
 import {
 	FileProtectOutlined,
 	ShoppingOutlined,
 	CheckCircleOutlined,
 	ExclamationCircleOutlined,
 	PlusOutlined,
+	UploadOutlined,
 } from '@ant-design/icons'
 import axios from 'axios'
 
@@ -24,6 +25,14 @@ const STATUS_COLOR = {
 	'Overdrawn': 'red',
 }
 
+function checkFileSizeLimit(file) {
+	const maxLimitInBytes = 5 * 1024 * 1024;
+	if (file.size > maxLimitInBytes) {
+		return false;
+	}
+	return true;
+}
+
 function SalesOrders() {
 	const { token } = theme.useToken()
 	const { message } = App.useApp()
@@ -34,7 +43,26 @@ function SalesOrders() {
 
 	const [soModalVisible, setSoModalVisible] = useState(false)
 	const [submitting, setSubmitting] = useState(false)
+	const [fileList, setFileList] = useState([])
 	const [soForm] = Form.useForm()
+
+	const uploadProps = {
+		listType: 'picture',
+		maxCount: 1,
+		fileList: fileList,
+		beforeUpload: (file) => {
+			const isValidSize = checkFileSizeLimit(file)
+			if (!isValidSize) {
+				message.error('File size exceeds the 5MB limit.')
+				return Upload.LIST_IGNORE
+			}
+			setFileList([file])
+			return false
+		},
+		onRemove: () => {
+			setFileList([])
+		},
+	}
 
 	const [selectedSoNumber, setSelectedSoNumber] = useState(null)
 	const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -71,8 +99,21 @@ function SalesOrders() {
 				ordered_qty_mt: values.ordered_qty_mt,
 				created_by: 1 
 			})
+			if (fileList.length > 0) {
+				const attachedFile = fileList[0]
+				const formData = new FormData()
+				formData.append('document', attachedFile)
+				formData.append('document_type', 'SO')
+				formData.append('reference_number', values.so_number)
+				formData.append('document_name', attachedFile.name)
+
+				await axios.post('/api/documents/upload', formData, {
+					headers: { 'Content-Type': 'multipart/form-data' },
+				})
+			}
 			message.success('Sales Order registered successfully.')
 			setSoModalVisible(false)
+			setFileList([])
 			soForm.resetFields()
 			fetchSalesOrders() 
 		} catch (err) {
@@ -203,7 +244,17 @@ function SalesOrders() {
 				soNumber={selectedSoNumber}
 			/>
 
-			<Modal title="Create New Sales Order" open={soModalVisible} onCancel={() => setSoModalVisible(false)} onOk={() => soForm.submit()} confirmLoading={submitting}>
+			<Modal
+				title="Create New Sales Order"
+				open={soModalVisible}
+				onCancel={() => {
+					setSoModalVisible(false)
+					setFileList([])
+					soForm.resetFields()
+				}}
+				onOk={() => soForm.submit()}
+				confirmLoading={submitting}
+			>
 				<Form form={soForm} layout="vertical" onFinish={handleCreateSO}>
 					<Form.Item name="so_number" label="Sales Order (SO) Number" rules={[{ required: true, message: 'Please input the SO number reference!' }]}>
 						<Input placeholder="e.g. SO-2026-0089" />
@@ -229,6 +280,12 @@ function SalesOrders() {
 
 					<Form.Item name="ordered_qty_mt" label="Committed Quantity (MT)" rules={[{ required: true, message: 'Input valid positive quantity tonnage!' }]}>
 						<InputNumber style={{ width: '100%' }} min={0.001} precision={3} placeholder="50.000" />
+					</Form.Item>
+
+					<Form.Item label="Attach Document (Optional)">
+						<Upload {...uploadProps}>
+							<Button icon={<UploadOutlined />}>Upload (Max: 1)</Button>
+						</Upload>
 					</Form.Item>
 				</Form>
 			</Modal>

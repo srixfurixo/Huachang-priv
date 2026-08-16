@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Typography, Input, Table, Tag, Space, Row, Col, Button, Progress, theme, App, Modal, Form, Select, DatePicker, InputNumber } from 'antd'
+import { Typography, Input, Table, Tag, Space, Row, Col, Button, Progress, theme, App, Modal, Form, Select, DatePicker, InputNumber, Upload } from 'antd'
 import {
 	FileTextOutlined,
 	InboxOutlined,
 	CheckCircleOutlined,
 	ExclamationCircleOutlined,
 	PlusOutlined,
+	UploadOutlined,
 } from '@ant-design/icons'
 import axios from 'axios'
 
@@ -24,6 +25,14 @@ const STATUS_COLOR = {
 	'Overdrawn': 'red',
 }
 
+function checkFileSizeLimit(file) {
+	const maxLimitInBytes = 5 * 1024 * 1024;
+	if (file.size > maxLimitInBytes) {
+		return false;
+	}
+	return true;
+}
+
 function PurchaseOrders() {
 	const { token } = theme.useToken()
 	const { message } = App.useApp()
@@ -32,7 +41,26 @@ function PurchaseOrders() {
 	const [searchText, setSearchText] = useState('')
 	const [poModalVisible, setPoModalVisible] = useState(false)
 	const [submitting, setSubmitting] = useState(false)
+	const [fileList, setFileList] = useState([])
 	const [poForm] = Form.useForm()
+
+	const uploadProps = {
+		listType: 'picture',
+		maxCount: 1,
+		fileList: fileList,
+		beforeUpload: (file) => {
+			const isValidSize = checkFileSizeLimit(file)
+			if (!isValidSize) {
+				message.error('File size exceeds the 5MB limit.')
+				return Upload.LIST_IGNORE
+			}
+			setFileList([file])
+			return false
+		},
+		onRemove: () => {
+			setFileList([])
+		},
+	}
 
 	const [selectedPoNumber, setSelectedPoNumber] = useState(null)
 	const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -69,8 +97,21 @@ function PurchaseOrders() {
 				ordered_qty_mt: values.ordered_qty_mt,
 				created_by: 1 
 			})
+			if (fileList.length > 0) {
+				const attachedFile = fileList[0]
+				const formData = new FormData()
+				formData.append('document', attachedFile)
+				formData.append('document_type', 'PO')
+				formData.append('reference_number', values.po_number)
+				formData.append('document_name', attachedFile.name)
+
+				await axios.post('/api/documents/upload', formData, {
+					headers: { 'Content-Type': 'multipart/form-data' },
+				})
+			}
 			message.success('Purchase Order created successfully.')
 			setPoModalVisible(false)
+			setFileList([])
 			poForm.resetFields()
 			fetchOrders() 
 		} catch (err) {
@@ -284,7 +325,11 @@ function PurchaseOrders() {
 			<Modal
 				title="Create New Purchase Order"
 				open={poModalVisible}
-				onCancel={() => setPoModalVisible(false)}
+				onCancel={() => {
+					setPoModalVisible(false)
+					setFileList([])
+					poForm.resetFields()
+				}}
 				onOk={() => poForm.submit()}
 				confirmLoading={submitting}
 			>
@@ -311,6 +356,12 @@ function PurchaseOrders() {
 
 					<Form.Item name="ordered_qty_mt" label="Ordered Quantity (MT)" rules={[{ required: true, message: 'Please input the ordered tonnage!' }]}>
 						<InputNumber style={{ width: '100%' }} min={0.001} precision={3} placeholder="1000.000" />
+					</Form.Item>
+
+					<Form.Item label="Attach Document (Optional)">
+						<Upload {...uploadProps}>
+							<Button icon={<UploadOutlined />}>Upload (Max: 1)</Button>
+						</Upload>
 					</Form.Item>
 				</Form>
 			</Modal>

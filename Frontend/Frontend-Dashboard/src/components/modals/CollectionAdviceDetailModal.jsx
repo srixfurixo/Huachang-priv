@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Modal, Spin, Table, Tag, message } from 'antd';
+import DocumentListSection from '../common/DocumentListSection';
 
 function CollectionAdviceDetailModal({ open, onClose, hgCaNumber }) {
   const [loading, setLoading] = useState(false);
@@ -69,6 +70,8 @@ function CollectionAdviceDetailModal({ open, onClose, hgCaNumber }) {
               { title: 'Status Confidence', dataIndex: 'status_confidence', render: (s) => <Tag color="green">{s}</Tag> },
             ]}
           />
+
+          <DocumentListSection documentType="CA" referenceNumber={hgCaNumber} />
         </div>
       ) : null}
     </Modal>

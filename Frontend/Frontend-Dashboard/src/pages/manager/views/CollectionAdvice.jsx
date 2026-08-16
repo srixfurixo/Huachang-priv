@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Typography, Input, Table, Tag, Space, Row, Col, Button, theme, App, Tabs, Modal, Form, Select, DatePicker, InputNumber, Switch } from 'antd'
+import { Typography, Input, Table, Tag, Space, Row, Col, Button, theme, App, Tabs, Modal, Form, Select, DatePicker, InputNumber, Switch, Upload } from 'antd'
 import {
 	ContainerOutlined,
 	ClockCircleOutlined,
@@ -7,7 +7,8 @@ import {
 	WarningOutlined,
 	PlusOutlined,
 	FileTextOutlined,
-	DeploymentUnitOutlined
+	DeploymentUnitOutlined,
+	UploadOutlined
 } from '@ant-design/icons'
 import axios from 'axios'
 
@@ -32,6 +33,14 @@ const DEST_COLOR = {
 	'External Warehouse': 'purple',
 }
 
+function checkFileSizeLimit(file) {
+	const maxLimitInBytes = 5 * 1024 * 1024;
+	if (file.size > maxLimitInBytes) {
+		return false;
+	}
+	return true;
+}
+
 function CollectionAdvice() {
 	const { token } = theme.useToken()
 	const { message } = App.useApp()
@@ -44,7 +53,26 @@ function CollectionAdvice() {
 	const [supplierModalOpen, setSupplierModalOpen] = useState(false)
 	const [huachangModalOpen, setHuachangModalOpen] = useState(false)
 	const [submitting, setSubmitting] = useState(false)
+	const [fileList, setFileList] = useState([])
 	const [autoGenNumber, setAutoGenNumber] = useState(true)
+
+	const uploadProps = {
+		listType: 'picture',
+		maxCount: 1,
+		fileList: fileList,
+		beforeUpload: (file) => {
+			const isValidSize = checkFileSizeLimit(file)
+			if (!isValidSize) {
+				message.error('File size exceeds the 5MB limit.')
+				return Upload.LIST_IGNORE
+			}
+			setFileList([file])
+			return false
+		},
+		onRemove: () => {
+			setFileList([])
+		},
+	}
 
 	const [selectedHgCaNumber, setSelectedHgCaNumber] = useState(null)
 	const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -130,8 +158,21 @@ function CollectionAdvice() {
 				lorry_number: values.lorry_number,
 				created_by: 1
 			})
+			if (fileList.length > 0) {
+				const attachedFile = fileList[0]
+				const formData = new FormData()
+				formData.append('document', attachedFile)
+				formData.append('document_type', 'CA')
+				formData.append('reference_number', values.hg_ca_number)
+				formData.append('document_name', attachedFile.name)
+
+				await axios.post('/api/documents/upload', formData, {
+					headers: { 'Content-Type': 'multipart/form-data' }
+				})
+			}
 			message.success('Huachang Collection Advice issued successfully.')
 			setHuachangModalOpen(false)
+			setFileList([])
 			huachangForm.resetFields()
 			fetchData()
 		} catch (err) {
@@ -286,7 +327,18 @@ function CollectionAdvice() {
 				</Form>
 			</Modal>
 
-			<Modal title="Issue Huachang Collection Advice" open={huachangModalOpen} onCancel={() => setHuachangModalOpen(false)} onOk={() => huachangForm.submit()} confirmLoading={submitting} width={600}>
+			<Modal
+				title="Issue Huachang Collection Advice"
+				open={huachangModalOpen}
+				onCancel={() => {
+					setHuachangModalOpen(false)
+					setFileList([])
+					huachangForm.resetFields()
+				}}
+				onOk={() => huachangForm.submit()}
+				confirmLoading={submitting}
+				width={600}
+			>
 				<Form form={huachangForm} layout="vertical" onFinish={handleCreateHuachangCa}>
 					<div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
 						<Text type="secondary">System Number Generation Assignment</Text>
@@ -364,6 +416,12 @@ function CollectionAdvice() {
 							</Form.Item>
 						</Col>
 					</Row>
+
+					<Form.Item label="Attach Document (Optional)">
+						<Upload {...uploadProps}>
+							<Button icon={<UploadOutlined />}>Upload (Max: 1)</Button>
+						</Upload>
+					</Form.Item>
 				</Form>
 			</Modal>
 		</AppLayout>

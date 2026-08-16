@@ -8,8 +8,9 @@ require('dotenv').config();
 const allowedOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:5173',
+    'http://103.209.158.213',
     process.env.CLIENT_ORIGIN 
-];
+].filter(Boolean);
 
 const corsOptions = {
     origin: function (origin, callback) {
@@ -75,21 +76,29 @@ const dashboardRoutes = require('./routes/inventory/dashboard');
 const allocationsRoutes = require('./routes/orders/allocations');
 const deliveryOrdersRoutes = require('./routes/logistics/delivery-orders');
 
+
+
 const authenticate = require('./middleware/authenticate');
 const authorize = require('./middleware/authorize');
 
-// Public: no login required
+// Public: 
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', forgotResetPasswordRoutes);
 app.use('/api/auth', logoutRoutes);
 
-// Admin only: creating new user accounts is kept on its own path so this
+// Admin only
 // check can never end up guarding /login by accident
 app.use('/api/auth/register', authenticate, authorize('Admin'), registerRoutes);
 
 // Admin only: managing user accounts and roles
 app.use('/api/admin', authenticate, authorize('Admin'), retrieveUsersRoutes);
 app.use('/api/admin', authenticate, authorize('Admin'), editUserRoutes);
+
+// All Staff for now: Document middleware and routes.
+const document_retrieverRoutes = require('./Helpers/document_retriever');
+const uploderRoutes = require('./Helpers/uploder');
+app.use('/api/documents', authenticate,authorize('Admin', 'Manager', 'Warehouse_Supervisor', 'Warehouse_Employee'), document_retrieverRoutes);
+app.use('/api/documents', authenticate,authorize('Admin', 'Manager', 'Warehouse_Supervisor', 'Warehouse_Employee'), uploderRoutes);
 
 // Admin, Manager, Warehouse_Supervisor, Warehouse_Employee: day-to-day warehouse/stock viewing and intake
 app.use('/api/inventory', authenticate, authorize('Admin', 'Manager', 'Warehouse_Supervisor', 'Warehouse_Employee'), intakeRoutes);
