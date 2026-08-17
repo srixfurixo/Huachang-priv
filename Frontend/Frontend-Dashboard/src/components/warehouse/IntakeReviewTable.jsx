@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Table, Tag, Button, Select, DatePicker, Space, Typography, App, Row, Col, theme } from 'antd'
 import { CheckOutlined, CloseOutlined } from '@ant-design/icons'
-// import axios from 'axios'
+import axios from 'axios'
 
 import RejectModal from './RejectModal'
-import { MOCK_ALL_INTAKE_LOGS } from '../../data/mockIntakeData'
 
 const { RangePicker } = DatePicker
 const { Text }        = Typography
@@ -31,23 +30,38 @@ function IntakeReviewTable() {
 	const fetchLogs = async () => {
 		setLoading(true)
 		try {
-			// ── Real call (enable once backend is ready) ──────────────
-			// const params = {
-			//   page: pagination.current,
-			//   limit: pagination.pageSize,
-			// }
-			// if (staffFilter)    params.user_id     = staffFilter
-			// if (statusFilter)   params.status      = statusFilter
-			// if (dateRange?.[0]) params.from        = dateRange[0].format('YYYY-MM-DD')
-			// if (dateRange?.[1]) params.to          = dateRange[1].format('YYYY-MM-DD')
-			// const res = await axios.get('/api/intake/logs', { params })
-			// setLogs(res.data.logs ?? [])
-			// setPagination(p => ({ ...p, total: res.data.total ?? 0 }))
+			const params = {}
+			if (staffFilter)    params.submitted_by = staffFilter
+			if (dateRange?.[0]) params.from         = dateRange[0].format('YYYY-MM-DD')
+			if (dateRange?.[1]) params.to           = dateRange[1].format('YYYY-MM-DD')
 
-			// ── Mock data ─────────────────────────────────────────────
-			setLogs(MOCK_ALL_INTAKE_LOGS)
-			setPagination((p) => ({ ...p, total: MOCK_ALL_INTAKE_LOGS.length }))
-		} catch {
+			const res = await axios.get('/api/inventory/intake/pending', { params })
+			const rawLogs = res.data.pending_intakes || []
+
+			const normalizedLogs = rawLogs.map((row) => ({
+				id: row.batch_code,
+				batch_code: row.batch_code,
+				entered_by_name: row.submitted_by || 'Warehouse Staff',
+				intake_date: row.submitted_at ? String(row.submitted_at).split('T')[0] : '',
+				po_number: row.batch_code,
+				ca_number: row.hg_ca_number || '—',
+				material: row.item_code,
+				material_desc: row.description,
+				qty_mt: row.quantity_mt,
+				location: row.location,
+				status: 'pending',
+				variance_mt: row.variance_mt,
+				hours_waiting: row.hours_waiting,
+			}))
+
+			const filteredLogs = statusFilter
+				? normalizedLogs.filter((l) => l.status === statusFilter)
+				: normalizedLogs
+
+			setLogs(filteredLogs)
+			setPagination((p) => ({ ...p, total: filteredLogs.length }))
+		} catch (err) {
+			console.error(err)
 			message.error('Failed to load intake records.')
 		} finally {
 			setLoading(false)
@@ -59,12 +73,11 @@ function IntakeReviewTable() {
 	const handleVerify = async (id) => {
 		setActionLoading(id)
 		try {
-			// await axios.patch(`/api/intake/${id}/status`, { status: 'verified', supervisor_id: user?.id })
-			await new Promise((r) => setTimeout(r, 500))
-			setLogs((prev) => prev.map((l) => l.id === id ? { ...l, status: 'verified' } : l))
+			await axios.patch(`/api/inventory/intake/${encodeURIComponent(id)}/verify`)
+			setLogs((prev) => prev.filter((l) => l.id !== id))
 			message.success('Entry verified successfully.')
-		} catch {
-			message.error('Failed to verify entry.')
+		} catch (err) {
+			message.error(err.response?.data?.error || 'Failed to verify entry.')
 		} finally {
 			setActionLoading(null)
 		}
@@ -73,19 +86,18 @@ function IntakeReviewTable() {
 	const handleRejectConfirm = async (id, reason) => {
 		setActionLoading(id)
 		try {
-			// await axios.patch(`/api/intake/${id}/status`, { status: 'rejected', supervisor_id: user?.id, note: reason })
-			await new Promise((r) => setTimeout(r, 500))
-			setLogs((prev) => prev.map((l) => l.id === id ? { ...l, status: 'rejected' } : l))
+			await axios.patch(`/api/inventory/intake/${encodeURIComponent(id)}/reject`, { reason })
+			setLogs((prev) => prev.filter((l) => l.id !== id))
 			setRejectTarget(null)
 			message.success('Entry rejected.')
-		} catch {
-			message.error('Failed to reject entry.')
+		} catch (err) {
+			message.error(err.response?.data?.error || 'Failed to reject entry.')
 		} finally {
 			setActionLoading(null)
 		}
 	}
 
-	const staffOptions = [...new Set(MOCK_ALL_INTAKE_LOGS.map((l) => l.entered_by_name))].map(
+	const staffOptions = [...new Set(logs.map((l) => l.entered_by_name))].map(
 		(name) => ({ value: name, label: name })
 	)
 
@@ -105,7 +117,7 @@ function IntakeReviewTable() {
 			width: 110,
 		},
 		{
-			title: 'PO Number',
+			title: 'PO / Batch',
 			dataIndex: 'po_number',
 			key: 'po_number',
 			render: (v) => <span className="font-mono text-sm">{v}</span>,
