@@ -41,16 +41,17 @@ router.get('/intake/pending', async (req, res) => {
                 i.description,
                 l.name AS location,
                 b.current_qty::float AS quantity_mt,
-                b.hg_ca_number,
-                hca.quantity_mt::float AS ca_expected_qty_mt,
-                (b.current_qty - hca.quantity_mt)::float AS variance_mt,
+                hcal.hg_ca_number,
+                hcal.quantity_mt::float AS ca_expected_qty_mt,
+                (b.current_qty - hcal.quantity_mt)::float AS variance_mt,
                 u.username AS submitted_by,
                 b.created_at AS submitted_at,
                 EXTRACT(EPOCH FROM (NOW() - b.created_at)) / 3600 AS hours_waiting
             FROM inventory_batches b
             JOIN items i ON i.item_code = b.item_code
             JOIN locations l ON l.id = b.location_id
-            LEFT JOIN huachang_collection_advices hca ON hca.hg_ca_number = b.hg_ca_number
+            LEFT JOIN huachang_collection_advice_lines hcal ON hcal.id = b.hg_ca_line_id
+            LEFT JOIN huachang_collection_advices hca ON hca.hg_ca_number = hcal.hg_ca_number
             LEFT JOIN inventory_movements im ON im.batch_code = b.batch_code AND im.movement_type = 'INTAKE'
             LEFT JOIN users u ON u.id = im.performed_by
             ${whereClause}
@@ -101,7 +102,10 @@ router.patch('/intake/:batch_code/reject', async (req, res) => {
         await client.query('BEGIN');
 
         const batchResult = await client.query(
-            'SELECT status_confidence, current_qty, location_id, hg_ca_number FROM inventory_batches WHERE batch_code = $1 FOR UPDATE',
+            `SELECT b.status_confidence, b.current_qty, b.location_id, hcal.hg_ca_number 
+             FROM inventory_batches b 
+             LEFT JOIN huachang_collection_advice_lines hcal ON hcal.id = b.hg_ca_line_id 
+             WHERE b.batch_code = $1 FOR UPDATE OF b`,
             [batch_code]
         );
 

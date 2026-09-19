@@ -6,6 +6,7 @@ import PurchaseOrders from './views/PurchaseOrders'
 import SalesOrders from './views/SalesOrders' 
 import CollectionAdvice from './views/CollectionAdvice'
 import IntakeLog from './views/IntakeLog'
+import ItemManagement from './views/ItemManagement'
 
 function ManagerPage() {
 	return (
@@ -17,6 +18,7 @@ function ManagerPage() {
 			<Route path="sales-orders" element={<SalesOrders />} /> 
 			<Route path="collection" element={<CollectionAdvice />} />
 			<Route path="intake-log" element={<IntakeLog />} />
+			<Route path="item-management" element={<ItemManagement />} />
 			<Route path="*" element={<Navigate to="/operations/overview" replace />} />
 		</Routes>
 	)

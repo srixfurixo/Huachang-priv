@@ -73,8 +73,15 @@ const availabilityRoutes = require('./routes/inventory/availability');
 const alertsRoutes = require('./routes/inventory/alerts');
 const stocktakeRoutes = require('./routes/inventory/stocktake');
 const dashboardRoutes = require('./routes/inventory/dashboard');
-const allocationsRoutes = require('./routes/orders/allocations');
-const deliveryOrdersRoutes = require('./routes/logistics/delivery-orders');
+const eligibleProductionRoutes = require('./routes/production/eligble_route_so');
+const createOrderRoutes = require('./routes/production/create-order');
+const allocateMaterialsRoutes = require('./routes/production/allocate-materials');
+const supplyOptionsRoutes = require('./routes/production/allocations');
+const productionOrdersRoutes = require('./routes/production/production-orders');
+const productionScheduleRoutes = require('./routes/production/production-schedule');
+const productionAllocationsRoutes = require('./routes/production/production-allocations');
+const supervisorApprovalRoutes = require('./routes/production/supervisor-approval');
+const assignmentRoutes = require('./routes/production/assignment');
 
 
 
@@ -130,14 +137,13 @@ app.use('/api/logistics', authenticate, authorize('Admin', 'Manager', 'Warehouse
 app.use('/api/logistics', authenticate, authorize('Admin', 'Manager', 'Warehouse_Supervisor', 'Delivery_Supervisor', 'Delivery_Driver'), getCaRoutes);
 
 // Admin, Manager, Delivery_Supervisor, Warehouse_Supervisor: creating and tracking delivery orders
-app.use('/api/logistics', authenticate, authorize('Admin', 'Manager', 'Delivery_Supervisor', 'Warehouse_Supervisor'), deliveryOrdersRoutes);
 
 // Admin, Manager: purchase and sales order management
 app.use('/api/orders', authenticate, authorize('Admin', 'Manager'), purchaseRoutes);
 app.use('/api/orders', authenticate, authorize('Admin', 'Manager'), getPurchaseRoutes);
 app.use('/api/orders', authenticate, authorize('Admin', 'Manager'), salesRoutes);
 app.use('/api/orders', authenticate, authorize('Admin', 'Manager'), getSalesRoutes);
-app.use('/api/orders', authenticate, authorize('Admin', 'Manager'), allocationsRoutes);
+//app.use('/api/orders', authenticate, authorize('Admin', 'Manager'), allocationsRoutes);
 
 // Any logged-in role: read-only reference data (items, locations, suppliers, customers)
 app.use('/api/referenceData', authenticate, itemsRoutes)
@@ -147,6 +153,17 @@ app.use('/api/referenceData', authenticate, customersRoutes)
 
 // Admin, Manager: changing an item's reorder threshold or bag weight is a planning decision, not a plain read
 app.use('/api/referenceData', authenticate, authorize('Admin', 'Manager'), itemSettingsRoutes)
+
+// Production routes
+app.use('/api', authenticate, eligibleProductionRoutes);
+app.use('/api', authenticate, createOrderRoutes);
+app.use('/api', authenticate, allocateMaterialsRoutes);
+app.use('/api', authenticate, supplyOptionsRoutes);
+app.use('/api/production', authenticate, productionOrdersRoutes);
+app.use('/api/production', authenticate, productionScheduleRoutes);
+app.use('/api/production', authenticate, productionAllocationsRoutes);
+app.use('/api/production', authenticate, supervisorApprovalRoutes);
+app.use('/api/production', authenticate, assignmentRoutes);
 
 
 const PORT = process.env.PORT || 5000;

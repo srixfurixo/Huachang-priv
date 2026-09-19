@@ -76,9 +76,10 @@ router.post('/huachang-ca', async (req, res) => {
         }
 
         const activeTrucksSumQuery = `
-            SELECT COALESCE(SUM(quantity_mt), 0) AS total_dispatched_qty
-            FROM huachang_collection_advices
-            WHERE supplier_ca_id = $1 AND status != 'Cancelled'
+            SELECT COALESCE(SUM(hcal.quantity_mt), 0) AS total_dispatched_qty
+            FROM huachang_collection_advice_lines hcal
+            JOIN huachang_collection_advices hca ON hcal.hg_ca_number = hca.hg_ca_number
+            WHERE hcal.supplier_ca_id = $1 AND hca.status != 'Cancelled'
         `;
         const activeTrucksSumResult = await client.query(activeTrucksSumQuery, [supplier_ca_id]);
         const totalDispatchedQty = Number(activeTrucksSumResult.rows[0].total_dispatched_qty);
@@ -94,31 +95,25 @@ router.post('/huachang-ca', async (req, res) => {
         const insertCaQuery = `
             INSERT INTO huachang_collection_advices (
                 hg_ca_number,
-                supplier_ca_id,
                 ca_date,
                 destination_type,
                 destination_id,
                 pickup_location_id,
-                item_code,
-                quantity_mt,
                 transporter_name,
                 driver_name,
                 lorry_number,
                 status,
                 created_by
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Dispatched', $12)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Dispatched', $9)
             RETURNING *;
         `;
         
         const insertValues = [
             hg_ca_number,
-            supplier_ca_id,
             ca_date,
             destination_type,
             destination_id !== undefined ? destination_id : null,
             pickup_location_id,
-            item_code,
-            requestedQty,
             transporter_name || null,
             driver_name || null,
             lorry_number || null,
@@ -126,7 +121,30 @@ router.post('/huachang-ca', async (req, res) => {
         ];
 
         const insertResult = await client.query(insertCaQuery, insertValues);
-        const newRecord = insertResult.rows[0];
+
+        const insertLineQuery = `
+            INSERT INTO huachang_collection_advice_lines (
+                hg_ca_number,
+                supplier_ca_id,
+                item_code,
+                quantity_mt
+            ) VALUES ($1, $2, $3, $4)
+            RETURNING *;
+        `;
+        const lineResult = await client.query(insertLineQuery, [
+            hg_ca_number,
+            supplier_ca_id,
+            item_code,
+            requestedQty
+        ]);
+
+        const newRecord = {
+            ...insertResult.rows[0],
+            supplier_ca_id,
+            item_code,
+            quantity_mt: requestedQty,
+            line_id: lineResult.rows[0].id
+        };
 
         await client.query('COMMIT');
 
@@ -161,22 +179,24 @@ router.get('/huachang-ca/:hg_ca_number', async (req, res) => {
             `SELECT 
                 hca.hg_ca_number,
                 hca.ca_date,
-                hca.item_code,
-                COALESCE(i.description, hca.item_code) AS item_description,
-                hca.quantity_mt::float AS quantity_mt,
+                hcal.item_code,
+                COALESCE(i.description, hcal.item_code) AS item_description,
+                hcal.quantity_mt::float AS quantity_mt,
                 hca.transporter_name,
                 hca.driver_name,
                 hca.lorry_number,
                 hca.status,
-                sca.po_number,
+                pol.po_number,
                 sca.supplier_ca_ref,
                 COALESCE(l.name, 'N/A') AS pickup_location_name,
                 hca.destination_type,
                 hca.destination_id,
                 u.username AS created_by
              FROM huachang_collection_advices hca
-             LEFT JOIN items i ON i.item_code = hca.item_code
-             LEFT JOIN supplier_collection_advices sca ON hca.supplier_ca_id = sca.id
+             LEFT JOIN huachang_collection_advice_lines hcal ON hcal.hg_ca_number = hca.hg_ca_number
+             LEFT JOIN items i ON i.item_code = hcal.item_code
+             LEFT JOIN supplier_collection_advices sca ON hcal.supplier_ca_id = sca.id
+             LEFT JOIN purchase_order_lines pol ON pol.id = sca.po_line_id
              LEFT JOIN locations l ON hca.pickup_location_id = l.id
              LEFT JOIN users u ON u.id = hca.created_by
              WHERE hca.hg_ca_number = $1`,
@@ -198,8 +218,9 @@ router.get('/huachang-ca/:hg_ca_number', async (req, res) => {
                 b.status_confidence, 
                 COALESCE(l.name, 'N/A') AS location
              FROM inventory_batches b
+             LEFT JOIN huachang_collection_advice_lines hcal ON b.hg_ca_line_id = hcal.id
              LEFT JOIN locations l ON l.id = b.location_id
-             WHERE b.hg_ca_number = $1`,
+             WHERE hcal.hg_ca_number = $1`,
             [hg_ca_number]
         );
 

@@ -33,10 +33,12 @@ router.post('/intake', async (req, res) => {
         await client.query('BEGIN');
 
         const caQuery = `
-            SELECT status, quantity_mt
-            FROM huachang_collection_advices
-            WHERE hg_ca_number = $1
-            FOR UPDATE
+            SELECT hca.status, COALESCE(SUM(hcal.quantity_mt), 0) AS quantity_mt, MIN(hcal.id) AS hg_ca_line_id
+            FROM huachang_collection_advices hca
+            LEFT JOIN huachang_collection_advice_lines hcal ON hca.hg_ca_number = hcal.hg_ca_number
+            WHERE hca.hg_ca_number = $1
+            GROUP BY hca.hg_ca_number, hca.status
+            FOR UPDATE OF hca
         `;
         const caResult = await client.query(caQuery, [hg_ca_number]);
 
@@ -48,6 +50,7 @@ router.post('/intake', async (req, res) => {
 
         const currentStatus = caResult.rows[0].status;
         const expectedQty = Number(caResult.rows[0].quantity_mt);
+        const hgCaLineId = caResult.rows[0].hg_ca_line_id;
 
         if (currentStatus === 'Completed') {
             const error = new Error('Intake already logged for this truck (CA status is Completed).');
@@ -72,7 +75,7 @@ router.post('/intake', async (req, res) => {
             INSERT INTO inventory_batches (
                 batch_code,
                 item_code,
-                hg_ca_number,
+                hg_ca_line_id,
                 location_id,
                 current_qty,
                 manufacture_date,
@@ -84,7 +87,7 @@ router.post('/intake', async (req, res) => {
         const batchValues = [
             batch_code,
             item_code,
-            hg_ca_number,
+            hgCaLineId,
             location_id,
             quantity_mt,
             manufacture_date || null,

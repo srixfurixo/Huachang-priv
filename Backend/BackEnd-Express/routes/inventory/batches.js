@@ -50,7 +50,7 @@ router.get('/batches', async (req, res) => {
 
     if (hg_ca_number) {
         params.push(hg_ca_number);
-        filters.push(`b.hg_ca_number = $${params.length}`);
+        filters.push(`hcal.hg_ca_number = $${params.length}`);
     }
 
     let whereClause = '';
@@ -67,6 +67,7 @@ router.get('/batches', async (req, res) => {
             `SELECT COUNT(*) AS total
              FROM inventory_batches b
              JOIN locations l ON l.id = b.location_id
+             LEFT JOIN huachang_collection_advice_lines hcal ON hcal.id = b.hg_ca_line_id
              ${whereClause}`,
             params
         );
@@ -89,11 +90,12 @@ router.get('/batches', async (req, res) => {
                 b.status_confidence,
                 b.last_verified_at,
                 CASE WHEN b.last_verified_at IS NOT NULL THEN EXTRACT(DAY FROM (NOW() - b.last_verified_at)) ELSE NULL END AS days_since_verified,
-                b.hg_ca_number,
+                hcal.hg_ca_number,
                 (${ITEM_TYPE_SQL}) AS item_type
             FROM inventory_batches b
             JOIN items i ON i.item_code = b.item_code
             JOIN locations l ON l.id = b.location_id
+            LEFT JOIN huachang_collection_advice_lines hcal ON hcal.id = b.hg_ca_line_id
             ${whereClause}
             ORDER BY b.manufacture_date ASC NULLS LAST, b.created_at ASC
             LIMIT $${dataParams.length - 1} OFFSET $${dataParams.length}

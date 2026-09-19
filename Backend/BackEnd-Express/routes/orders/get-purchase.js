@@ -19,7 +19,8 @@ router.get('/purchase', async (req, res) => {
             (po.ordered_qty_mt - COALESCE(SUM(sca.available_qty_mt), 0)) AS remaining_balance_mt
         FROM purchase_orders po
         INNER JOIN suppliers s ON po.supplier_id = s.id
-        LEFT JOIN supplier_collection_advices sca ON po.po_number = sca.po_number
+        LEFT JOIN purchase_order_lines pol ON po.po_number = pol.po_number
+        LEFT JOIN supplier_collection_advices sca ON pol.id = sca.po_line_id
         GROUP BY 
             po.po_number,
             po.supplier_id,
@@ -69,7 +70,8 @@ router.get('/purchase/:po_number', async (req, res) => {
              LEFT JOIN suppliers s ON po.supplier_id = s.id
              LEFT JOIN items i ON i.item_code = po.item_code
              LEFT JOIN users u ON u.id = po.created_by
-             LEFT JOIN supplier_collection_advices sca ON po.po_number = sca.po_number
+             LEFT JOIN purchase_order_lines pol ON po.po_number = pol.po_number
+             LEFT JOIN supplier_collection_advices sca ON pol.id = sca.po_line_id
              WHERE po.po_number = $1
              GROUP BY po.po_number, po.supplier_id, s.name, po.item_code, i.description, po.po_date, po.ordered_qty_mt, po.status, u.username, po.created_at`,
             [po_number]
@@ -89,7 +91,8 @@ router.get('/purchase/:po_number', async (req, res) => {
                 sca.ca_date,
                 sca.available_qty_mt::float AS available_qty_mt
              FROM supplier_collection_advices sca
-             WHERE sca.po_number = $1
+             JOIN purchase_order_lines pol ON sca.po_line_id = pol.id
+             WHERE pol.po_number = $1
              ORDER BY sca.ca_date DESC`,
             [po_number]
         );

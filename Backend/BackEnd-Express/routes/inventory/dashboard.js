@@ -60,9 +60,10 @@ router.get('/dashboard/summary', async (req, res) => {
         const reportedMt = Number(kpiDb.rows[0].reported_mt);
 
         const inboundDb = await pool.query(`
-            SELECT COALESCE(SUM(quantity_mt), 0)::float AS inbound_mt, COUNT(*) AS active_ca_count
-            FROM huachang_collection_advices
-            WHERE status NOT IN ('Completed', 'Cancelled')
+            SELECT COALESCE(SUM(hcal.quantity_mt), 0)::float AS inbound_mt, COUNT(DISTINCT hca.hg_ca_number) AS active_ca_count
+            FROM huachang_collection_advices hca
+            JOIN huachang_collection_advice_lines hcal ON hca.hg_ca_number = hcal.hg_ca_number
+            WHERE hca.status NOT IN ('Completed', 'Cancelled')
         `);
 
         const availability = await getAvailability();
@@ -151,7 +152,8 @@ router.get('/dashboard/summary', async (req, res) => {
                 po.status
             FROM purchase_orders po
             JOIN suppliers s ON s.id = po.supplier_id
-            LEFT JOIN supplier_collection_advices sca ON sca.po_number = po.po_number
+            LEFT JOIN purchase_order_lines pol ON pol.po_number = po.po_number
+            LEFT JOIN supplier_collection_advices sca ON sca.po_line_id = pol.id
             WHERE po.status != 'Fully Collected'
             GROUP BY po.po_number, s.name, po.ordered_qty_mt, po.status
             ORDER BY po.po_date DESC 

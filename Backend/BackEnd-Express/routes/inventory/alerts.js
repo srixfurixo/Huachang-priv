@@ -53,9 +53,10 @@ async function getAllAlerts() {
 
         // 6. CA Inbound Delivery Overdue (> 7 days)
         pool.query(`
-            SELECT 'CA_NOT_RECEIVED' AS type, 'Medium' AS severity, hca.item_code, hca.hg_ca_number, l.name AS location,
-                   hca.ca_date, hca.quantity_mt::float AS quantity_mt
+            SELECT 'CA_NOT_RECEIVED' AS type, 'Medium' AS severity, hcal.item_code, hca.hg_ca_number, l.name AS location,
+                   hca.ca_date, hcal.quantity_mt::float AS quantity_mt
             FROM huachang_collection_advices hca
+            JOIN huachang_collection_advice_lines hcal ON hcal.hg_ca_number = hca.hg_ca_number
             JOIN locations l ON l.id = hca.pickup_location_id
             WHERE hca.status NOT IN ('Completed', 'Cancelled') AND hca.ca_date < CURRENT_DATE - INTERVAL '7 days'
         `),
@@ -65,7 +66,8 @@ async function getAllAlerts() {
             SELECT 'PO_OVERDUE' AS type, 'Medium' AS severity, po.item_code, po.po_number, po.po_date,
                    (po.ordered_qty_mt - COALESCE(SUM(sca.available_qty_mt), 0))::float AS uncollected_qty
             FROM purchase_orders po
-            LEFT JOIN supplier_collection_advices sca ON sca.po_number = po.po_number
+            LEFT JOIN purchase_order_lines pol ON pol.po_number = po.po_number
+            LEFT JOIN supplier_collection_advices sca ON sca.po_line_id = pol.id
             WHERE po.po_date < CURRENT_DATE - INTERVAL '30 days'
             GROUP BY po.po_number, po.item_code, po.po_date, po.ordered_qty_mt
             HAVING (po.ordered_qty_mt - COALESCE(SUM(sca.available_qty_mt), 0)) > 0

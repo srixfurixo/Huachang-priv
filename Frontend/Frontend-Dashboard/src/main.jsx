@@ -6,8 +6,9 @@ import { ThemeProvider } from './context/ThemeContext'
 import App from './App'
 import './styles/globals.css'
 
-// App-level axios defaults (relative baseURL so Nginx handles proxying in prod & Vite in dev)
-axios.defaults.baseURL = import.meta.env.VITE_API_URL || ''
+// Leave baseURL empty in dev so /api/* goes through the Vite proxy (vite.config.js → :3001).
+// Only set VITE_API_URL in .env.local when you need to point at a remote backend.
+axios.defaults.baseURL = import.meta.env.VITE_API_URL ?? ''
 axios.defaults.withCredentials = true
 
 /**

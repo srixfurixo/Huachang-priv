@@ -64,9 +64,10 @@ router.get('/items/:item_code', async (req, res) => {
             SELECT
                 b.batch_code, b.location_id, l.name AS location, l.location_type,
                 b.current_qty::float AS current_qty, b.manufacture_date, b.expiry_date,
-                b.status_confidence, b.hg_ca_number
+                b.status_confidence, hcal.hg_ca_number
             FROM inventory_batches b
             JOIN locations l ON l.id = b.location_id
+            LEFT JOIN huachang_collection_advice_lines hcal ON hcal.id = b.hg_ca_line_id
             WHERE b.item_code = $1
             ORDER BY b.manufacture_date ASC NULLS LAST, b.created_at ASC
             `,
@@ -82,7 +83,8 @@ router.get('/items/:item_code', async (req, res) => {
                 (po.ordered_qty_mt - COALESCE(SUM(sca.available_qty_mt), 0))::float AS remaining_qty_mt
             FROM purchase_orders po
             JOIN suppliers s ON s.id = po.supplier_id
-            LEFT JOIN supplier_collection_advices sca ON sca.po_number = po.po_number
+            LEFT JOIN purchase_order_lines pol ON pol.po_number = po.po_number
+            LEFT JOIN supplier_collection_advices sca ON sca.po_line_id = pol.id
             WHERE po.item_code = $1
             GROUP BY po.po_number, po.supplier_id, s.name, po.po_date, po.ordered_qty_mt
             HAVING (po.ordered_qty_mt - COALESCE(SUM(sca.available_qty_mt), 0)) > 0
@@ -94,10 +96,11 @@ router.get('/items/:item_code', async (req, res) => {
         const openSalesOrdersResult = await pool.query(
             `
             SELECT so.so_number, so.customer_id, c.name AS customer_name, so.so_date,
-                   so.ordered_qty_mt::float AS ordered_qty_mt, so.status
+                   sol.ordered_qty_mt::float AS ordered_qty_mt, sol.status
             FROM sales_orders so
             JOIN customers c ON c.id = so.customer_id
-            WHERE so.item_code = $1 AND so.status NOT IN ('Cancelled', 'Fulfilled')
+            JOIN sales_order_lines sol ON sol.so_number = so.so_number
+            WHERE sol.item_code = $1 AND sol.status NOT IN ('Cancelled', 'Fulfilled')
             ORDER BY so.so_date ASC
             `,
             [item_code]

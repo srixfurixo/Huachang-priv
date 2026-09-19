@@ -128,22 +128,27 @@ router.get('/supplier-ca/active', async (req, res) => {
     const query = `
         SELECT 
             sca.id,
-            sca.po_number,
+            pol.po_number,
             sca.supplier_ca_ref,
             sca.ca_date,
             sca.available_qty_mt,
-            COALESCE(SUM(hca.quantity_mt), 0) AS total_truck_dispatched_mt,
-            (sca.available_qty_mt - COALESCE(SUM(hca.quantity_mt), 0)) AS remaining_ca_balance_mt
+            COALESCE(SUM(hcal.quantity_mt), 0) AS total_truck_dispatched_mt,
+            (sca.available_qty_mt - COALESCE(SUM(hcal.quantity_mt), 0)) AS remaining_ca_balance_mt
         FROM supplier_collection_advices sca
-        LEFT JOIN huachang_collection_advices hca 
-            ON sca.id = hca.supplier_ca_id AND hca.status != 'Cancelled'
+        LEFT JOIN purchase_order_lines pol 
+            ON sca.po_line_id = pol.id
+        LEFT JOIN (
+            huachang_collection_advice_lines hcal
+            JOIN huachang_collection_advices hca 
+                ON hcal.hg_ca_number = hca.hg_ca_number AND hca.status != 'Cancelled'
+        ) ON sca.id = hcal.supplier_ca_id
         GROUP BY 
             sca.id,
-            sca.po_number,
+            pol.po_number,
             sca.supplier_ca_ref,
             sca.ca_date,
             sca.available_qty_mt
-        HAVING (sca.available_qty_mt - COALESCE(SUM(hca.quantity_mt), 0)) > 0
+        HAVING (sca.available_qty_mt - COALESCE(SUM(hcal.quantity_mt), 0)) > 0
         ORDER BY sca.ca_date DESC;
     `;
 

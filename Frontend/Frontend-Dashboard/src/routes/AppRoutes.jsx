@@ -9,6 +9,7 @@ import ProtectedRoutes from '../utils/protectedRoutes'
 import DashboardPage from '../pages/shared/DashboardPage'
 
 import InventoryDashboard from '../pages/InventoryDashboard'
+import ProductionPage from '../pages/production/ProductionPage'
 
 function AppRoutes() {
     return (
@@ -55,6 +56,25 @@ function AppRoutes() {
                         allowRoles={['Admin', 'Warehouse_Supervisor', 'Warehouse_Employee']}
                     >
                         <WarehousePage />
+                    </ProtectedRoutes>
+                }
+            />
+
+            {/* Production routes — Accessible to all roles */}
+            <Route
+                path="/production/*"
+                element={
+                    <ProtectedRoutes
+                        allowRoles={[
+                            'Admin',
+                            'Manager',
+                            'Warehouse_Supervisor',
+                            'Warehouse_Employee',
+                            'Delivery_Supervisor',
+                            'Delivery_Driver',
+                        ]}
+                    >
+                        <ProductionPage />
                     </ProtectedRoutes>
                 }
             />

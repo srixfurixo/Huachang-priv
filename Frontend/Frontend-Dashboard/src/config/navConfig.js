@@ -82,6 +82,21 @@ export const NAV_ITEMS = [
 		description: 'Review material intake entered by floor staff alongside outgoing dispatch records.',
 		layout: 'desktop',
 	},
+	{
+		key: '/production',
+		label: 'Production Management',
+		section: 'OPERATIONS',
+		roles: ['Admin', 'Manager', 'Warehouse_Supervisor', 'Warehouse_Employee', 'Delivery_Supervisor', 'Delivery_Driver'],
+		description: 'Order backlog, production orders, supervisor approvals, and master schedule calendar.',
+	},
+	{
+		key: '/operations/item-management',
+		label: 'Item Management',
+		section: 'OPERATIONS',
+		roles: ['Admin', 'Manager'],
+		description: 'Manage item catalog including finished products, raw ingredients, and bagged SKUs with conflict detection.',
+		layout: 'desktop',
+	},
 
 	// ── Warehouse (Supervisor + Staff) ──────────────────────────────
 	{

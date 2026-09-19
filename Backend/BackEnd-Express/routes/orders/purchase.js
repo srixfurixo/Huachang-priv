@@ -60,6 +60,17 @@ router.post('/purchase', async (req, res) => {
         const insertResult = await client.query(insertPoQuery, insertValues);
         const newRecord = insertResult.rows[0];
 
+        const insertPoLineQuery = `
+            INSERT INTO purchase_order_lines (
+                po_number,
+                item_code,
+                ordered_qty_mt,
+                status
+            ) VALUES ($1, $2, $3, 'Pending')
+            ON CONFLICT (po_number, item_code) DO NOTHING;
+        `;
+        await client.query(insertPoLineQuery, [po_number, item_code, requestedQty]);
+
         await client.query('COMMIT');
 
         return res.status(201).json({

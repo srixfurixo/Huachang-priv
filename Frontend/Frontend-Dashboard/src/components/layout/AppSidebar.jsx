@@ -15,6 +15,7 @@ import {
 	ImportOutlined,
 	CarryOutOutlined,
 	FormOutlined,
+	AppstoreOutlined,
 	SendOutlined,
 	EnvironmentOutlined,
 	HistoryOutlined,
@@ -25,6 +26,7 @@ import {
 	SettingOutlined,
 	AlertOutlined,
 	MenuFoldOutlined,
+	BuildOutlined,
 } from '@ant-design/icons'
 import { navyPalette } from '../../theme/antdTheme'
 import { useAppTheme } from '../../context/ThemeContext'
@@ -42,6 +44,7 @@ const NAV_ICONS = {
 	'/operations/dispatch': <ApartmentOutlined />,
 	'/operations/purchase-orders': <FileTextOutlined />,
 	'/operations/collection': <ContainerOutlined />,
+	'/production': <BuildOutlined />,
 	'/operations/intake-log': <SwapOutlined />,
 	'/warehouse/tasks': <UnorderedListOutlined />,
 	'/warehouse/inventory': <EyeOutlined />,
