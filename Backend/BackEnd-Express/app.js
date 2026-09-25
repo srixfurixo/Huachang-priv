@@ -44,6 +44,7 @@ const forgotResetPasswordRoutes = require('./Auth/forgot-reset-password');
 const registerRoutes = require('./Auth/register');
 const retrieveUsersRoutes = require('./Admin/retrieve_users');
 const logoutRoutes = require('./Auth/logout');
+const meRoutes = require('./Auth/me');
 const intakeRoutes = require('./routes/inventory/intake');
 const inventoryReportingRoutes = require('./Inventory/reporting');
 const supplierCaRoutes = require('./routes/logistics/supplier-ca');
@@ -59,6 +60,7 @@ const locationsRoutes = require('./ReferenceData/locations');
 const suppliersRoutes = require('./ReferenceData/suppliers');
 const customersRoutes = require('./ReferenceData/customers');
 const itemSettingsRoutes = require('./ReferenceData/item-settings');
+const activeSupplierCasRoutes = require('./ReferenceData/active-supplier-cas');
 const editUserRoutes = require('./routes/admin/editUser');
 
 const intakeVerificationRoutes = require('./routes/inventory/intake-verification');
@@ -92,6 +94,8 @@ const authorize = require('./middleware/authorize');
 app.use('/api/auth', authRoutes);
 app.use('/api/auth', forgotResetPasswordRoutes);
 app.use('/api/auth', logoutRoutes);
+
+app.use('/api/auth', meRoutes);
 
 // Admin only
 // check can never end up guarding /login by accident
@@ -134,6 +138,7 @@ app.use('/api/inventory', authenticate, authorize('Admin', 'Manager'), adjustmen
 // Admin, Manager, Warehouse_Supervisor, Delivery_Supervisor, Delivery_Driver: delivery/logistics operations
 app.use('/api/logistics', authenticate, authorize('Admin', 'Manager', 'Warehouse_Supervisor', 'Delivery_Supervisor', 'Delivery_Driver'), supplierCaRoutes);
 app.use('/api/logistics', authenticate, authorize('Admin', 'Manager', 'Warehouse_Supervisor', 'Delivery_Supervisor', 'Delivery_Driver'), huachangCaRoutes);
+app.use('/api/advices', authenticate, authorize('Admin', 'Manager', 'Warehouse_Supervisor', 'Delivery_Supervisor', 'Delivery_Driver'), huachangCaRoutes);
 app.use('/api/logistics', authenticate, authorize('Admin', 'Manager', 'Warehouse_Supervisor', 'Delivery_Supervisor', 'Delivery_Driver'), getCaRoutes);
 
 // Admin, Manager, Delivery_Supervisor, Warehouse_Supervisor: creating and tracking delivery orders
@@ -150,6 +155,7 @@ app.use('/api/referenceData', authenticate, itemsRoutes)
 app.use('/api/referenceData', authenticate, locationsRoutes)
 app.use('/api/referenceData', authenticate, suppliersRoutes)
 app.use('/api/referenceData', authenticate, customersRoutes)
+app.use('/api/referenceData', authenticate, activeSupplierCasRoutes)
 
 // Admin, Manager: changing an item's reorder threshold or bag weight is a planning decision, not a plain read
 app.use('/api/referenceData', authenticate, authorize('Admin', 'Manager'), itemSettingsRoutes)

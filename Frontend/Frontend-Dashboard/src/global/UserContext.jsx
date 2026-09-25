@@ -1,9 +1,6 @@
 import React, { createContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api';
 
-
-// this is to make sure all request to backend has the token pending protected api.
-axios.defaults.withCredentials = true; 
 export const UserContext = createContext();
 
 export function UserProvider({ children }) {
@@ -12,11 +9,17 @@ export function UserProvider({ children }) {
 
     useEffect(() => {
         const fetchUser = async () => {
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                setUser(JSON.parse(storedUser));
+            try {
+                const response = await api.get('/auth/me');
+                setUser(response.data.user);
+                localStorage.setItem('user', JSON.stringify(response.data.user));
+            } catch (error) {
+                console.error('Session verification failed:', error);
+                localStorage.removeItem('user');
+                setUser(null);
+            } finally {
+                setLoading(false);
             }
-            setLoading(false);
         };
 
         fetchUser();
@@ -29,7 +32,7 @@ export function UserProvider({ children }) {
 
     async function logout() {
         try {
-            await axios.post('/api/auth/logout'); // pending 
+            await api.post('/auth/logout');
         } catch (error) {
             console.error('Error during logout:', error);
         } finally {

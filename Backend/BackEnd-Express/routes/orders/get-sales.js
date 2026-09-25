@@ -15,6 +15,8 @@ router.get('/get-sales', async (req, res) => {
             so.sales_agent,
             so.ship_via,
             so.status,
+            COALESCE(STRING_AGG(DISTINCT sol.item_code, ', ' ORDER BY sol.item_code), 'No Items') AS item_code,
+            COALESCE(SUM(sol.ordered_qty_mt), 0)::float AS ordered_qty_mt,
             COALESCE(SUM(sol.ordered_qty_mt), 0)::float AS total_ordered_qty_mt,
             COALESCE(SUM(sol.no_of_bags), 0)::int AS total_no_of_bags,
             COUNT(sol.id)::int AS total_line_items,

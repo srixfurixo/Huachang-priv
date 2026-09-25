@@ -1,12 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Typography, Input, Table, Tag, Space, Row, Col, Button, Progress, theme, App, Modal, Form, Select, DatePicker, InputNumber, Upload } from 'antd'
+import { Typography, Input, Table, Tag, Space, Row, Col, Button, Progress, theme, App } from 'antd'
 import {
 	FileTextOutlined,
 	InboxOutlined,
 	CheckCircleOutlined,
 	ExclamationCircleOutlined,
 	PlusOutlined,
-	UploadOutlined,
 } from '@ant-design/icons'
 import axios from 'axios'
 
@@ -14,6 +13,7 @@ import AppLayout from '../../../components/layout/AppLayout'
 import StatCard from '../../../components/common/StatCard'
 import { ITEM_DESCRIPTION } from '../../../data/mockMasterData'
 import PurchaseOrderDetailModal from '../../../components/modals/PurchaseOrderDetailModal'
+import CreatePurchaseOrderModal from '../../../components/modals/CreatePurchaseOrderModal'
 
 const { Title, Text } = Typography
 const { Search } = Input
@@ -25,42 +25,13 @@ const STATUS_COLOR = {
 	'Overdrawn': 'red',
 }
 
-function checkFileSizeLimit(file) {
-	const maxLimitInBytes = 5 * 1024 * 1024;
-	if (file.size > maxLimitInBytes) {
-		return false;
-	}
-	return true;
-}
-
 function PurchaseOrders() {
 	const { token } = theme.useToken()
 	const { message } = App.useApp()
 	const [orders, setOrders] = useState([])
 	const [loading, setLoading] = useState(true)
 	const [searchText, setSearchText] = useState('')
-	const [poModalVisible, setPoModalVisible] = useState(false)
-	const [submitting, setSubmitting] = useState(false)
-	const [fileList, setFileList] = useState([])
-	const [poForm] = Form.useForm()
-
-	const uploadProps = {
-		listType: 'picture',
-		maxCount: 1,
-		fileList: fileList,
-		beforeUpload: (file) => {
-			const isValidSize = checkFileSizeLimit(file)
-			if (!isValidSize) {
-				message.error('File size exceeds the 5MB limit.')
-				return Upload.LIST_IGNORE
-			}
-			setFileList([file])
-			return false
-		},
-		onRemove: () => {
-			setFileList([])
-		},
-	}
+	const [createModalOpen, setCreateModalOpen] = useState(false)
 
 	const [selectedPoNumber, setSelectedPoNumber] = useState(null)
 	const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -84,41 +55,6 @@ function PurchaseOrders() {
 	const handleViewDetail = (poNumber) => {
 		setSelectedPoNumber(poNumber)
 		setDetailModalOpen(true)
-	}
-
-	const handleCreatePO = async (values) => {
-		setSubmitting(true)
-		try {
-			await axios.post('/api/orders/purchase', {
-				po_number: values.po_number,
-				supplier_id: values.supplier_id, 
-				item_code: values.item_code,
-				po_date: values.po_date.format('YYYY-MM-DD'),
-				ordered_qty_mt: values.ordered_qty_mt,
-				created_by: 1 
-			})
-			if (fileList.length > 0) {
-				const attachedFile = fileList[0]
-				const formData = new FormData()
-				formData.append('document', attachedFile)
-				formData.append('document_type', 'PO')
-				formData.append('reference_number', values.po_number)
-				formData.append('document_name', attachedFile.name)
-
-				await axios.post('/api/documents/upload', formData, {
-					headers: { 'Content-Type': 'multipart/form-data' },
-				})
-			}
-			message.success('Purchase Order created successfully.')
-			setPoModalVisible(false)
-			setFileList([])
-			poForm.resetFields()
-			fetchOrders() 
-		} catch (err) {
-			message.error(err.response?.data?.error || 'Failed to create Purchase Order.')
-		} finally {
-			setSubmitting(false)
-		}
 	}
 
 	const filteredOrders = useMemo(() => {
@@ -237,7 +173,7 @@ function PurchaseOrders() {
 					</Text>
 				</div>
 
-				<Button type="primary" icon={<PlusOutlined />} onClick={() => setPoModalVisible(true)}>
+				<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
 					New Purchase Order
 				</Button>
 			</div>
@@ -322,49 +258,11 @@ function PurchaseOrders() {
 				poNumber={selectedPoNumber}
 			/>
 
-			<Modal
-				title="Create New Purchase Order"
-				open={poModalVisible}
-				onCancel={() => {
-					setPoModalVisible(false)
-					setFileList([])
-					poForm.resetFields()
-				}}
-				onOk={() => poForm.submit()}
-				confirmLoading={submitting}
-			>
-				<Form form={poForm} layout="vertical" onFinish={handleCreatePO}>
-					<Form.Item name="po_number" label="PO Number" rules={[{ required: true, message: 'Please input the PO number!' }]}>
-						<Input placeholder="e.g. 2405-53" />
-					</Form.Item>
-					
-					<Form.Item name="supplier_id" label="Supplier ID" rules={[{ required: true, message: 'Please input the numeric supplier ID!' }]}>
-						<InputNumber style={{ width: '100%' }} placeholder="e.g. 2" />
-					</Form.Item>
-
-					<Form.Item name="item_code" label="Material Item Code" rules={[{ required: true, message: 'Please select an item code!' }]}>
-						<Select placeholder="Select item reference">
-							<Select.Option value="MOP">MOP (Muriate of Potash)</Select.Option>
-							<Select.Option value="ERP">ERP (Egypt Rock Phosphate)</Select.Option>
-							<Select.Option value="CIRP">CIRP (Trading Phosphate)</Select.Option>
-						</Select>
-					</Form.Item>
-
-					<Form.Item name="po_date" label="PO Date" rules={[{ required: true, message: 'Please select the order date!' }]}>
-						<DatePicker style={{ width: '100%' }} />
-					</Form.Item>
-
-					<Form.Item name="ordered_qty_mt" label="Ordered Quantity (MT)" rules={[{ required: true, message: 'Please input the ordered tonnage!' }]}>
-						<InputNumber style={{ width: '100%' }} min={0.001} precision={3} placeholder="1000.000" />
-					</Form.Item>
-
-					<Form.Item label="Attach Document (Optional)">
-						<Upload {...uploadProps}>
-							<Button icon={<UploadOutlined />}>Upload (Max: 1)</Button>
-						</Upload>
-					</Form.Item>
-				</Form>
-			</Modal>
+			<CreatePurchaseOrderModal
+				open={createModalOpen}
+				onClose={() => setCreateModalOpen(false)}
+				onSuccess={() => fetchOrders()}
+			/>
 		</AppLayout>
 	)
 }

@@ -1,19 +1,19 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Typography, Input, Table, Tag, Space, Row, Col, Button, theme, App, Modal, Form, Select, DatePicker, InputNumber, Upload } from 'antd'
+import { Typography, Input, Table, Tag, Space, Row, Col, Button, theme, App } from 'antd'
 import {
 	FileProtectOutlined,
 	ShoppingOutlined,
 	CheckCircleOutlined,
 	ExclamationCircleOutlined,
 	PlusOutlined,
-	UploadOutlined,
 } from '@ant-design/icons'
-import axios from 'axios'
+import api from '../../../utils/api'
 
 import AppLayout from '../../../components/layout/AppLayout'
 import StatCard from '../../../components/common/StatCard'
 import { ITEM_DESCRIPTION } from '../../../data/mockMasterData'
 import SalesOrderDetailModal from '../../../components/modals/SalesOrderDetailModal'
+import CreateSalesOrderModal from '../../../components/modals/CreateSalesOrderModal'
 
 const { Title, Text } = Typography
 const { Search } = Input
@@ -25,14 +25,6 @@ const STATUS_COLOR = {
 	'Overdrawn': 'red',
 }
 
-function checkFileSizeLimit(file) {
-	const maxLimitInBytes = 5 * 1024 * 1024;
-	if (file.size > maxLimitInBytes) {
-		return false;
-	}
-	return true;
-}
-
 function SalesOrders() {
 	const { token } = theme.useToken()
 	const { message } = App.useApp()
@@ -40,29 +32,7 @@ function SalesOrders() {
 	const [orders, setOrders] = useState([])
 	const [loading, setLoading] = useState(true)
 	const [searchText, setSearchText] = useState('')
-
-	const [soModalVisible, setSoModalVisible] = useState(false)
-	const [submitting, setSubmitting] = useState(false)
-	const [fileList, setFileList] = useState([])
-	const [soForm] = Form.useForm()
-
-	const uploadProps = {
-		listType: 'picture',
-		maxCount: 1,
-		fileList: fileList,
-		beforeUpload: (file) => {
-			const isValidSize = checkFileSizeLimit(file)
-			if (!isValidSize) {
-				message.error('File size exceeds the 5MB limit.')
-				return Upload.LIST_IGNORE
-			}
-			setFileList([file])
-			return false
-		},
-		onRemove: () => {
-			setFileList([])
-		},
-	}
+	const [createModalOpen, setCreateModalOpen] = useState(false)
 
 	const [selectedSoNumber, setSelectedSoNumber] = useState(null)
 	const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -70,7 +40,7 @@ function SalesOrders() {
 	const fetchSalesOrders = async () => {
 		setLoading(true)
 		try {
-			const res = await axios.get('/api/orders/get-sales')
+			const res = await api.get('/orders/get-sales')
 			setOrders(res.data.sales_orders || [])
 		} catch (error) {
 			message.error('Failed to retrieve sales orders from the database.')
@@ -88,41 +58,6 @@ function SalesOrders() {
 		setDetailModalOpen(true)
 	}
 
-	const handleCreateSO = async (values) => {
-		setSubmitting(true)
-		try {
-			await axios.post('/api/orders/sales', {
-				so_number: values.so_number,
-				customer_id: values.customer_id,
-				item_code: values.item_code,
-				so_date: values.so_date.format('YYYY-MM-DD'),
-				ordered_qty_mt: values.ordered_qty_mt,
-				created_by: 1 
-			})
-			if (fileList.length > 0) {
-				const attachedFile = fileList[0]
-				const formData = new FormData()
-				formData.append('document', attachedFile)
-				formData.append('document_type', 'SO')
-				formData.append('reference_number', values.so_number)
-				formData.append('document_name', attachedFile.name)
-
-				await axios.post('/api/documents/upload', formData, {
-					headers: { 'Content-Type': 'multipart/form-data' },
-				})
-			}
-			message.success('Sales Order registered successfully.')
-			setSoModalVisible(false)
-			setFileList([])
-			soForm.resetFields()
-			fetchSalesOrders() 
-		} catch (err) {
-			message.error(err.response?.data?.error || 'Failed to record Sales Order.')
-		} finally {
-			setSubmitting(false)
-		}
-	}
-
 	const filteredOrders = useMemo(() => {
 		const value = searchText.trim().toLowerCase()
 		if (!value) return orders
@@ -134,9 +69,10 @@ function SalesOrders() {
 	}, [orders, searchText])
 
 	const totalSOs = orders.length
-	const openBalance = orders
-		.filter((o) => Number(o.remaining_balance_mt || o.ordered_qty_mt) > 0)
-		.reduce((s, o) => s + Number(o.remaining_balance_mt || o.ordered_qty_mt), 0)
+	const openBalance = orders.reduce((sum, o) => {
+		const qty = Number(o.ordered_qty_mt || o.total_ordered_qty_mt || 0);
+		return sum + (isNaN(qty) ? 0 : qty);
+	}, 0);
 	const fullyCollected = orders.filter((o) => o.status === 'Fully Collected').length
 	const overdrawn = orders.filter((o) => o.status === 'Overdrawn').length
 
@@ -161,15 +97,26 @@ function SalesOrders() {
 			title: 'Item Code',
 			dataIndex: 'item_code',
 			key: 'item_code',
-			render: (code) => (
-				<div>
-					<Text strong style={{ fontSize: 13 }}>{code}</Text>
-					<br />
-					<Text type="secondary" style={{ fontSize: 12 }}>
-						{ITEM_DESCRIPTION[code] || 'Fertilizer Product'}
-					</Text>
-				</div>
-			),
+			render: (code, record) => {
+				if (!code || code === 'No Items') {
+					return <Text type="secondary" italic>No items assigned</Text>;
+				}
+				const items = code.split(',').map((item) => item.trim());
+				return (
+					<Space size={[0, 4]} wrap>
+						{items.map((item) => (
+							<Tag key={item} color="blue" style={{ fontWeight: 600 }}>
+								{item}
+							</Tag>
+						))}
+						{record.total_line_items > 1 && (
+							<Text type="secondary" style={{ fontSize: 11, marginLeft: 4 }}>
+								({record.total_line_items} lines)
+							</Text>
+						)}
+					</Space>
+				);
+			},
 		},
 		{
 			title: 'Ordered Quantity',
@@ -201,7 +148,7 @@ function SalesOrders() {
 					</Text>
 				</div>
 
-				<Button type="primary" icon={<PlusOutlined />} onClick={() => setSoModalVisible(true)}>
+				<Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateModalOpen(true)}>
 					New Sales Order
 				</Button>
 			</div>
@@ -244,51 +191,11 @@ function SalesOrders() {
 				soNumber={selectedSoNumber}
 			/>
 
-			<Modal
-				title="Create New Sales Order"
-				open={soModalVisible}
-				onCancel={() => {
-					setSoModalVisible(false)
-					setFileList([])
-					soForm.resetFields()
-				}}
-				onOk={() => soForm.submit()}
-				confirmLoading={submitting}
-			>
-				<Form form={soForm} layout="vertical" onFinish={handleCreateSO}>
-					<Form.Item name="so_number" label="Sales Order (SO) Number" rules={[{ required: true, message: 'Please input the SO number reference!' }]}>
-						<Input placeholder="e.g. SO-2026-0089" />
-					</Form.Item>
-					
-					<Form.Item name="customer_id" label="Customer (Debtor) Master ID" rules={[{ required: true, message: 'Please enter the numeric customer ID reference!' }]}>
-						<InputNumber style={{ width: '100%' }} placeholder="e.g. 5" />
-					</Form.Item>
-
-					<Form.Item name="item_code" label="Material Item Code" rules={[{ required: true, message: 'Please select the material family!' }]}>
-						<Select placeholder="Select item category">
-							<Select.Option value="MOP">MOP (Muriate of Potash)</Select.Option>
-							<Select.Option value="ERP">ERP (Egypt Rock Phosphate)</Select.Option>
-							<Select.Option value="CIRP">CIRP (Trading Phosphate)</Select.Option>
-							<Select.Option value="CBB-403">CBB-403 (Compound BB 10-10-30)</Select.Option>
-							<Select.Option value="CBB-404">CBB-404 (Compound BB 13-13-21)</Select.Option>
-						</Select>
-					</Form.Item>
-
-					<Form.Item name="so_date" label="SO Booking Date" rules={[{ required: true, message: 'Please pick the order confirmation date!' }]}>
-						<DatePicker style={{ width: '100%' }} />
-					</Form.Item>
-
-					<Form.Item name="ordered_qty_mt" label="Committed Quantity (MT)" rules={[{ required: true, message: 'Input valid positive quantity tonnage!' }]}>
-						<InputNumber style={{ width: '100%' }} min={0.001} precision={3} placeholder="50.000" />
-					</Form.Item>
-
-					<Form.Item label="Attach Document (Optional)">
-						<Upload {...uploadProps}>
-							<Button icon={<UploadOutlined />}>Upload (Max: 1)</Button>
-						</Upload>
-					</Form.Item>
-				</Form>
-			</Modal>
+			<CreateSalesOrderModal
+				open={createModalOpen}
+				onClose={() => setCreateModalOpen(false)}
+				onSuccess={() => fetchSalesOrders()}
+			/>
 		</AppLayout>
 	)
 }

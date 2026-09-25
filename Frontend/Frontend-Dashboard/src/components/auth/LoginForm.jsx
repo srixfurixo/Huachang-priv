@@ -12,7 +12,7 @@ import {
 	theme,
 } from 'antd'
 import { MailOutlined, LockOutlined } from '@ant-design/icons'
-import axios from 'axios'
+import api from '../../utils/api'
 import { sanitizeInput } from '../../utils/sanitizeInput'
 import { getDefaultHomePath } from '../../config/navConfig'
 import { UserContext } from '../../global/UserContext'
@@ -37,7 +37,7 @@ function LoginForm() {
 		const sanitizedPassword = sanitizeInput(values.password)
 
 		try {
-			const response = await axios.post('/api/auth/login', {
+			const response = await api.post('/auth/login', {
 				passed_in_username: sanitizedEmail,
 				passed_in_password: sanitizedPassword,
 			})
