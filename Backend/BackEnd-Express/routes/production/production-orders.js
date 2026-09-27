@@ -84,6 +84,470 @@ router.get('/orders', async (req, res) => {
     }
 });
 
+// Dedicated route to compute progress across all execution phases for a production order
+router.get('/orders/:id/progress', async (req, res) => {
+    const { id } = req.params;
+
+    // Validate that order ID is a valid positive integer
+    const orderId = Number(id);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid production order ID.'
+        });
+    }
+
+    try {
+        // Query order header, raw material allocations, and progress logs
+        const orderQuery = `
+            SELECT id, production_order_code, handling_type, target_qty_mt, target_unit_count, status
+            FROM production_orders
+            WHERE id = $1;
+        `;
+        const allocationsQuery = `
+            SELECT allocated_qty_mt, actual_retrieved_mt
+            FROM production_material_allocations
+            WHERE production_order_id = $1 AND status != 'Cancelled';
+        `;
+        const logsQuery = `
+            SELECT stage_name, tonnage_processed, units_packed
+            FROM production_progress_logs
+            WHERE production_order_id = $1;
+        `;
+
+        const [orderResult, allocationsResult, logsResult] = await Promise.all([
+            pool.query(orderQuery, [orderId]),
+            pool.query(allocationsQuery, [orderId]),
+            pool.query(logsQuery, [orderId])
+        ]);
+
+        if (orderResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Production order not found.'
+            });
+        }
+
+        const order = orderResult.rows[0];
+        const allocations = allocationsResult.rows;
+        const logs = logsResult.rows;
+
+        // Step 1: Material Retrieval Calculation
+        let total_needed_mt = 0;
+        let total_retrieved_mt = 0;
+        for (let i = 0; i < allocations.length; i++) {
+            const row = allocations[i];
+            total_needed_mt = total_needed_mt + (Number(row.allocated_qty_mt) || 0);
+            total_retrieved_mt = total_retrieved_mt + (Number(row.actual_retrieved_mt) || 0);
+        }
+
+        let step1Percentage = 0;
+        if (total_needed_mt > 0) {
+            step1Percentage = Math.round((total_retrieved_mt / total_needed_mt) * 100);
+        }
+        if (step1Percentage > 100) {
+            step1Percentage = 100;
+        }
+        const step1Completed = Boolean(total_needed_mt > 0 && total_retrieved_mt >= total_needed_mt);
+
+        // Step 2: Processing / Mixing Calculation
+        const target_qty_mt = Number(order.target_qty_mt) || 0;
+        let total_mixed_mt = 0;
+        for (let i = 0; i < logs.length; i++) {
+            const log = logs[i];
+            if (log.stage_name === 'Mixing') {
+                total_mixed_mt = total_mixed_mt + (Number(log.tonnage_processed) || 0);
+            }
+        }
+
+        let step2Percentage = 0;
+        if (target_qty_mt > 0) {
+            step2Percentage = Math.round((total_mixed_mt / target_qty_mt) * 100);
+        }
+        if (step2Percentage > 100) {
+            step2Percentage = 100;
+        }
+        const step2Completed = Boolean(target_qty_mt > 0 && total_mixed_mt >= target_qty_mt);
+
+        // Step 3: Output / Packaging Calculation
+        const target_unit_count = Number(order.target_unit_count) || 0;
+        let total_packed_mt = 0;
+        let total_packed_units = 0;
+        for (let i = 0; i < logs.length; i++) {
+            const log = logs[i];
+            if (log.stage_name === 'Packaging') {
+                total_packed_mt = total_packed_mt + (Number(log.tonnage_processed) || 0);
+                total_packed_units = total_packed_units + (Number(log.units_packed) || 0);
+            }
+        }
+
+        let step3Percentage = 0;
+        if (target_qty_mt > 0) {
+            step3Percentage = Math.round((total_packed_mt / target_qty_mt) * 100);
+        }
+        if (step3Percentage > 100) {
+            step3Percentage = 100;
+        }
+        const step3Completed = Boolean(target_qty_mt > 0 && total_packed_mt >= target_qty_mt);
+
+        // Overall Progress & Stage Detection
+        let overallPercentage = 0;
+        if (order.handling_type === 'Repacking') {
+            // 2-step flow: only materials and packaging
+            overallPercentage = Math.round((step1Percentage + step3Percentage) / 2);
+        } else {
+            // 3-step flow: materials, mixing, packaging
+            overallPercentage = Math.round((step1Percentage + step2Percentage + step3Percentage) / 3);
+        }
+
+        let currentStage = 'RAW_MATERIALS';
+        if (order.handling_type === 'Repacking') {
+            if (!step1Completed) {
+                currentStage = 'RAW_MATERIALS';
+            } else if (!step3Completed) {
+                currentStage = 'PACKAGING';
+            } else {
+                currentStage = 'COMPLETED';
+            }
+        } else {
+            if (!step1Completed) {
+                currentStage = 'RAW_MATERIALS';
+            } else if (!step2Completed) {
+                currentStage = 'PROCESSING';
+            } else if (!step3Completed) {
+                currentStage = 'PACKAGING';
+            } else {
+                currentStage = 'COMPLETED';
+            }
+        }
+
+        // Return structured progress response
+        return res.status(200).json({
+            success: true,
+            production_order_id: order.id,
+            production_order_code: order.production_order_code,
+            status: order.status,
+            progress: {
+                overall_percentage: overallPercentage,
+                current_stage: currentStage,
+                step_1_materials: {
+                    needed_mt: Number(total_needed_mt.toFixed(3)),
+                    retrieved_mt: Number(total_retrieved_mt.toFixed(3)),
+                    percentage: step1Percentage,
+                    is_completed: step1Completed
+                },
+                step_2_processing: {
+                    handling_type: order.handling_type,
+                    target_mt: Number(target_qty_mt.toFixed(3)),
+                    processed_mt: Number(total_mixed_mt.toFixed(3)),
+                    percentage: step2Percentage,
+                    is_completed: step2Completed
+                },
+                step_3_output: {
+                    target_mt: Number(target_qty_mt.toFixed(3)),
+                    packed_mt: Number(total_packed_mt.toFixed(3)),
+                    target_units: target_unit_count,
+                    packed_units: total_packed_units,
+                    percentage: step3Percentage,
+                    is_completed: step3Completed
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Failed to compute production order progress:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to calculate production order progress.'
+        });
+    }
+});
+
+// Dedicated route to fetch all operational execution details and calculated progress
+router.get('/orders/:id/execution-details', async (req, res) => {
+    const { id } = req.params;
+
+    // Validate that order ID is a valid positive integer
+    const orderId = Number(id);
+    if (!Number.isInteger(orderId) || orderId <= 0) {
+        return res.status(400).json({
+            success: false,
+            error: 'Invalid production order ID.'
+        });
+    }
+
+    try {
+        // Query 1: Fetch core order header details
+        const orderQuery = `
+            SELECT
+                po.id,
+                po.production_order_code,
+                po.so_line_id,
+                sol.so_number,
+                c.name AS customer_name,
+                c.debtor_code,
+                po.item_code,
+                i.description AS item_description,
+                i.uom,
+                po.handling_type,
+                po.target_qty_mt,
+                po.target_packaging,
+                po.target_unit_count,
+                po.recipe_instructions,
+                po.scheduled_start_date,
+                po.scheduled_end_date,
+                po.scheduled_shift,
+                po.status,
+                po.created_at
+            FROM production_orders po
+            JOIN items i ON po.item_code = i.item_code
+            JOIN sales_order_lines sol ON po.so_line_id = sol.id
+            JOIN sales_orders so ON sol.so_number = so.so_number
+            JOIN customers c ON so.customer_id = c.id
+            WHERE po.id = $1;
+        `;
+
+        // Query 2: Fetch raw material allocations for Tab 1
+        const allocationsQuery = `
+            SELECT
+                pma.id,
+                pma.raw_item_code,
+                i.description AS raw_item_description,
+                pma.source_type,
+                pma.source_ref,
+                pma.allocated_qty_mt,
+                pma.actual_retrieved_mt,
+                pma.status,
+                pma.retrieved_at,
+                u.username AS retrieved_by_username
+            FROM production_material_allocations pma
+            JOIN items i ON pma.raw_item_code = i.item_code
+            LEFT JOIN users u ON pma.retrieved_by = u.id
+            WHERE pma.production_order_id = $1 AND pma.status != 'Cancelled'
+            ORDER BY pma.id ASC;
+        `;
+
+        // Query 3: Fetch shift progress history for Tab 2 and Tab 3
+        const logsQuery = `
+            SELECT
+                ppl.id,
+                ppl.stage_name,
+                ppl.shift_date,
+                ppl.shift_name,
+                ppl.tonnage_processed,
+                ppl.units_packed,
+                ppl.waste_kg,
+                ppl.remarks,
+                u.username AS logged_by_username,
+                ppl.created_at
+            FROM production_progress_logs ppl
+            LEFT JOIN users u ON ppl.logged_by = u.id
+            WHERE ppl.production_order_id = $1
+            ORDER BY ppl.created_at ASC;
+        `;
+
+        const [orderResult, allocationsResult, logsResult] = await Promise.all([
+            pool.query(orderQuery, [orderId]),
+            pool.query(allocationsQuery, [orderId]),
+            pool.query(logsQuery, [orderId])
+        ]);
+
+        if (orderResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Production order not found.'
+            });
+        }
+
+        const order = orderResult.rows[0];
+        const raw_materials = allocationsResult.rows;
+        const progress_logs = logsResult.rows;
+
+        // Step 1: Raw Materials Retrieval Calculation
+        let total_needed_mt = 0;
+        let total_retrieved_mt = 0;
+        for (let i = 0; i < raw_materials.length; i++) {
+            const row = raw_materials[i];
+            total_needed_mt = total_needed_mt + (Number(row.allocated_qty_mt) || 0);
+            total_retrieved_mt = total_retrieved_mt + (Number(row.actual_retrieved_mt) || 0);
+        }
+
+        let step1Percentage = 0;
+        if (total_needed_mt > 0) {
+            step1Percentage = Math.round((total_retrieved_mt / total_needed_mt) * 100);
+        }
+        if (step1Percentage > 100) {
+            step1Percentage = 100;
+        }
+        const step1Completed = Boolean(total_needed_mt > 0 && total_retrieved_mt >= total_needed_mt);
+
+        // Step 2: Processing / Mixing Calculation
+        const target_qty_mt = Number(order.target_qty_mt) || 0;
+        let total_mixed_mt = 0;
+        for (let i = 0; i < progress_logs.length; i++) {
+            const log = progress_logs[i];
+            if (log.stage_name === 'Mixing') {
+                total_mixed_mt = total_mixed_mt + (Number(log.tonnage_processed) || 0);
+            }
+        }
+
+        let step2Percentage = 0;
+        if (target_qty_mt > 0) {
+            step2Percentage = Math.round((total_mixed_mt / target_qty_mt) * 100);
+        }
+        if (step2Percentage > 100) {
+            step2Percentage = 100;
+        }
+        const step2Completed = Boolean(target_qty_mt > 0 && total_mixed_mt >= target_qty_mt);
+
+        // Step 3: Packaging / Output Calculation
+        const target_unit_count = Number(order.target_unit_count) || 0;
+        let total_packed_mt = 0;
+        let total_packed_units = 0;
+        for (let i = 0; i < progress_logs.length; i++) {
+            const log = progress_logs[i];
+            if (log.stage_name === 'Packaging') {
+                total_packed_mt = total_packed_mt + (Number(log.tonnage_processed) || 0);
+                total_packed_units = total_packed_units + (Number(log.units_packed) || 0);
+            }
+        }
+
+        let step3Percentage = 0;
+        if (target_qty_mt > 0) {
+            step3Percentage = Math.round((total_packed_mt / target_qty_mt) * 100);
+        }
+        if (step3Percentage > 100) {
+            step3Percentage = 100;
+        }
+        const step3Completed = Boolean(target_qty_mt > 0 && total_packed_mt >= target_qty_mt);
+
+        // Overall Percentage & Current Operational Stage
+        let overallPercentage = 0;
+        if (order.handling_type === 'Repacking') {
+            // 2-step flow: only materials and packaging
+            overallPercentage = Math.round((step1Percentage + step3Percentage) / 2);
+        } else {
+            // 3-step flow: materials, mixing, packaging
+            overallPercentage = Math.round((step1Percentage + step2Percentage + step3Percentage) / 3);
+        }
+
+        let currentStage = 'RAW_MATERIALS';
+        if (order.handling_type === 'Repacking') {
+            if (!step1Completed) {
+                currentStage = 'RAW_MATERIALS';
+            } else if (!step3Completed) {
+                currentStage = 'PACKAGING';
+            } else {
+                currentStage = 'COMPLETED';
+            }
+        } else {
+            if (!step1Completed) {
+                currentStage = 'RAW_MATERIALS';
+            } else if (!step2Completed) {
+                currentStage = 'PROCESSING';
+            } else if (!step3Completed) {
+                currentStage = 'PACKAGING';
+            } else {
+                currentStage = 'COMPLETED';
+            }
+        }
+
+        // Format order details explicitly without shorthand
+        const formattedOrder = {
+            id: order.id,
+            production_order_code: order.production_order_code,
+            so_number: order.so_number,
+            customer_name: order.customer_name,
+            debtor_code: order.debtor_code,
+            item_code: order.item_code,
+            item_description: order.item_description,
+            handling_type: order.handling_type,
+            target_qty_mt: Number(target_qty_mt.toFixed(3)),
+            target_packaging: order.target_packaging,
+            target_unit_count: target_unit_count,
+            recipe_instructions: order.recipe_instructions,
+            scheduled_start_date: order.scheduled_start_date,
+            scheduled_end_date: order.scheduled_end_date,
+            scheduled_shift: order.scheduled_shift,
+            status: order.status
+        };
+
+        // Format raw material allocation rows explicitly
+        const formattedRawMaterials = [];
+        for (let i = 0; i < raw_materials.length; i++) {
+            const mat = raw_materials[i];
+            formattedRawMaterials.push({
+                id: mat.id,
+                raw_item_code: mat.raw_item_code,
+                raw_item_description: mat.raw_item_description,
+                source_type: mat.source_type,
+                source_ref: mat.source_ref,
+                allocated_qty_mt: Number(Number(mat.allocated_qty_mt || 0).toFixed(3)),
+                actual_retrieved_mt: Number(Number(mat.actual_retrieved_mt || 0).toFixed(3)),
+                status: mat.status,
+                retrieved_at: mat.retrieved_at,
+                retrieved_by_username: mat.retrieved_by_username
+            });
+        }
+
+        // Format shift progress history rows explicitly
+        const formattedProgressLogs = [];
+        for (let i = 0; i < progress_logs.length; i++) {
+            const log = progress_logs[i];
+            formattedProgressLogs.push({
+                id: log.id,
+                stage_name: log.stage_name,
+                shift_date: log.shift_date,
+                shift_name: log.shift_name,
+                tonnage_processed: Number(Number(log.tonnage_processed || 0).toFixed(3)),
+                units_packed: Number(log.units_packed) || 0,
+                waste_kg: Number(Number(log.waste_kg || 0).toFixed(3)),
+                remarks: log.remarks,
+                logged_by_username: log.logged_by_username,
+                created_at: log.created_at
+            });
+        }
+
+        // Return consolidated execution details payload
+        return res.status(200).json({
+            success: true,
+            order: formattedOrder,
+            raw_materials: formattedRawMaterials,
+            progress_logs: formattedProgressLogs,
+            progress: {
+                overall_percentage: overallPercentage,
+                current_stage: currentStage,
+                step_1_materials: {
+                    needed_mt: Number(total_needed_mt.toFixed(3)),
+                    retrieved_mt: Number(total_retrieved_mt.toFixed(3)),
+                    percentage: step1Percentage,
+                    is_completed: step1Completed
+                },
+                step_2_processing: {
+                    handling_type: order.handling_type,
+                    target_mt: Number(target_qty_mt.toFixed(3)),
+                    processed_mt: Number(total_mixed_mt.toFixed(3)),
+                    percentage: step2Percentage,
+                    is_completed: step2Completed
+                },
+                step_3_output: {
+                    target_mt: Number(target_qty_mt.toFixed(3)),
+                    packed_mt: Number(total_packed_mt.toFixed(3)),
+                    target_units: target_unit_count,
+                    packed_units: total_packed_units,
+                    percentage: step3Percentage,
+                    is_completed: step3Completed
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Failed to fetch production execution details:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Failed to retrieve production execution details.'
+        });
+    }
+});
+
 router.get('/orders/:id', async (req, res) => {
     const { id } = req.params;
 

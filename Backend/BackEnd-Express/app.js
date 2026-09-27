@@ -61,6 +61,7 @@ const suppliersRoutes = require('./ReferenceData/suppliers');
 const customersRoutes = require('./ReferenceData/customers');
 const itemSettingsRoutes = require('./ReferenceData/item-settings');
 const activeSupplierCasRoutes = require('./ReferenceData/active-supplier-cas');
+const openPoLinesRoutes = require('./ReferenceData/open-po-lines');
 const editUserRoutes = require('./routes/admin/editUser');
 
 const intakeVerificationRoutes = require('./routes/inventory/intake-verification');
@@ -84,6 +85,7 @@ const productionScheduleRoutes = require('./routes/production/production-schedul
 const productionAllocationsRoutes = require('./routes/production/production-allocations');
 const supervisorApprovalRoutes = require('./routes/production/supervisor-approval');
 const assignmentRoutes = require('./routes/production/assignment');
+const productionExecutionRouter = require('./routes/production/production-execution');
 
 
 
@@ -156,6 +158,7 @@ app.use('/api/referenceData', authenticate, locationsRoutes)
 app.use('/api/referenceData', authenticate, suppliersRoutes)
 app.use('/api/referenceData', authenticate, customersRoutes)
 app.use('/api/referenceData', authenticate, activeSupplierCasRoutes)
+app.use('/api/referenceData', authenticate, openPoLinesRoutes)
 
 // Admin, Manager: changing an item's reorder threshold or bag weight is a planning decision, not a plain read
 app.use('/api/referenceData', authenticate, authorize('Admin', 'Manager'), itemSettingsRoutes)
@@ -170,6 +173,7 @@ app.use('/api/production', authenticate, productionScheduleRoutes);
 app.use('/api/production', authenticate, productionAllocationsRoutes);
 app.use('/api/production', authenticate, supervisorApprovalRoutes);
 app.use('/api/production', authenticate, assignmentRoutes);
+app.use('/api/production', authenticate, productionExecutionRouter);
 
 
 const PORT = process.env.PORT || 5000;
